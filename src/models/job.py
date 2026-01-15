@@ -36,6 +36,9 @@ class JobInfo:
     # 飞书多维表格记录ID
     record_id: Optional[str] = None        # 多维表格记录ID
 
+    # 是否为孤立作业（进程停止但 .lck 未删除）
+    is_orphan: bool = False                # 孤立作业标记
+
     @property
     def duration(self) -> Optional[str]:
         """计算耗时，返回格式化字符串"""

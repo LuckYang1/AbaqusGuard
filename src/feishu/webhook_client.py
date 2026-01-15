@@ -142,6 +142,7 @@ Step: {job.step} | Increment: {job.increment} | Step Time: {job.step_time:.3f} |
         content = f"""作业名称: {job.name}
 计算结果: {job.result or job.status.value}
 计算耗时: {job.duration or '未知'}
+Total Time: {job.total_time:.2f}
 ODB大小: {job.odb_size_mb} MB"""
         return self.send(f"[{job.status.value}] Abaqus 计算完成", content, is_success=is_success)
 
@@ -171,6 +172,7 @@ Abaqus 求解器进程已停止运行，但 `.lck` 文件仍然存在。
 最后状态: {job.result}
 
 运行时长: {duration_str}
+Total Time: {job.total_time:.2f}
 
 文件信息:
 {job_info}

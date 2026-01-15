@@ -108,6 +108,10 @@ class AbaqusMonitor:
         """处理作业完成事件"""
         self._log(f"作业完成: {job.name} - {job.status.value}")
 
+        # 孤立作业已在 detector 中发送警告通知，跳过
+        if job.is_orphan:
+            return
+
         # 发送 Webhook 通知
         if self.settings.FEISHU_WEBHOOK_URL:
             self.webhook.send_job_complete(job)
