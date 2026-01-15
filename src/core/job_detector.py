@@ -76,8 +76,8 @@ class JobDetector:
                         if lck_age >= self.settings.LCK_GRACE_PERIOD:
                             # 超过宽限期且无进程，判定为孤立
                             self._handle_orphan_job(job, sta_file)
-                            # 从孤立列表移除（避免重复处理）
-                            self.warned_orphan_lck.discard(job_key)
+                            # 添加到孤立列表，避免重复处理
+                            self.warned_orphan_lck.add(job_key)
                             self.running_jobs.pop(job_key, None)
                             continue
 
@@ -124,6 +124,8 @@ class JobDetector:
         if not self.settings.ENABLE_PROCESS_DETECTION:
             return True
 
+        # 对于新发现的 .lck 文件，先作为新作业处理
+        # 孤立文件检测在后续轮询中进行
         abaqus_running = self.process_detector.is_abaqus_running()
 
         if abaqus_running:
@@ -138,13 +140,12 @@ class JobDetector:
                     print(f"新 .lck 文件 ({int(lck_age)}秒)，等待进程启动: {job_name}")
                 return True
             else:
-                # 超过宽限期，判定为孤立文件
+                # 超过宽限期但进程未运行，可能是孤立文件
+                # 但仍然先作为新作业处理，在下次轮询时再检查是否变成孤立
                 if self.settings.VERBOSE:
-                    print(f"检测到孤立 .lck 文件 (已存在 {int(lck_age)} 秒): {job_name}")
-                    print(f"   该文件将被忽略，请手动删除")
-                job_key = f"{job_name}@{directory}"
-                self.warned_orphan_lck.add(job_key)
-                return False
+                    print(f".lck 文件已存在 {int(lck_age)} 秒，进程未运行: {job_name}")
+                    print(f"   先作为新作业处理，后续轮询再检查状态")
+                return True
 
     def _get_lck_age(self, directory: Path, job_name: str) -> float:
         """
