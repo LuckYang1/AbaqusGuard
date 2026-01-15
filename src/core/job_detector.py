@@ -127,6 +127,7 @@ class JobDetector:
             job.increment = result.get("increment", 0)
             job.total_time = result.get("total_time", 0.0)
             job.step_time = result.get("step_time", 0.0)
+            job.inc_time = result.get("inc_time", 0.0)
 
         except Exception as e:
             if self.settings.VERBOSE:

@@ -133,7 +133,7 @@ class WebhookClient:
 已运行: {duration}
 
 当前进度:
-Step: {job.step} | Increment: {job.increment} | Step Time: {job.step_time:.3f} | Total Time: {job.total_time:.2f}{sta_section}"""
+Step: {job.step} | Increment: {job.increment} | Step Time: {job.step_time:.3f} | Inc Time: {job.inc_time:.4f} | Total Time: {job.total_time:.2f}{sta_section}"""
         return self.send("[Abaqus] 计算进度", content, is_success=True)
 
     def send_job_complete(self, job: JobInfo) -> bool:

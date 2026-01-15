@@ -125,6 +125,7 @@ class AbaqusMonitor:
         tracked.increment = current.increment
         tracked.total_time = current.total_time
         tracked.step_time = current.step_time
+        tracked.inc_time = current.inc_time
         tracked.status = current.status
 
     def _check_progress_notify(self, job: JobInfo):
