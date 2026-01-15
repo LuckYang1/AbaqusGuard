@@ -1,8 +1,10 @@
 """
 进程检测模块
 通过检测 Abaqus 求解器进程判断作业状态
+使用 Windows tasklist 命令，不依赖 psutil
 """
-import psutil
+import subprocess
+from typing import Optional
 
 from src.config.settings import get_settings
 
@@ -21,6 +23,30 @@ class ProcessDetector:
     def __init__(self):
         """初始化检测器"""
         self.settings = get_settings()
+        self._cached_result: Optional[bool] = None
+        self._cache_time: Optional[float] = None
+        self._cache_ttl = 5.0  # 缓存5秒
+
+    def _run_tasklist(self) -> str:
+        """
+        运行 tasklist 命令获取进程列表
+
+        Returns:
+            进程列表输出文本（小写）
+        """
+        try:
+            result = subprocess.run(
+                ["tasklist", "/FO", "CSV", "/NH"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+                creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
+            )
+            if result.returncode == 0:
+                return result.stdout.lower()
+            return ""
+        except Exception:
+            return ""
 
     def is_abaqus_running(self) -> bool:
         """
@@ -29,59 +55,18 @@ class ProcessDetector:
         Returns:
             是否有 Abaqus 进程运行
         """
-        for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
-            try:
-                proc_name = proc.info['name'].lower()
-                cmdline = proc.info['cmdline']
-                if cmdline is None:
-                    continue
+        output = self._run_tasklist()
 
-                # 检查进程名
-                if any(proc_name == p.lower() for p in self.ABAQUS_PROCESSES):
-                    return True
+        if not output:
+            # 无法确定时，假设进程在运行，避免误报
+            return True
 
-                # 检查命令行参数
-                cmdline_str = ' '.join(cmdline).lower()
-                if 'abaqus' in cmdline_str and ('standard' in cmdline_str or 'explicit' in cmdline_str or 'job=' in cmdline_str):
-                    return True
-
-            except (psutil.NoSuchProcess, psutil.AccessDenied):
-                continue
+        # 检查是否有任何 Abaqus 进程
+        for process_name in self.ABAQUS_PROCESSES:
+            if process_name.lower() in output:
+                return True
 
         return False
-
-    def get_abaqus_processes(self) -> list:
-        """
-        获取所有 Abaqus 相关进程
-
-        Returns:
-            进程信息列表
-        """
-        abaqus_procs = []
-
-        for proc in psutil.process_iter(['pid', 'name', 'cmdline', 'create_time']):
-            try:
-                cmdline = proc.info['cmdline']
-                if cmdline is None:
-                    continue
-
-                cmdline_str = ' '.join(cmdline).lower()
-
-                # 检查是否为 Abaqus 进程
-                if 'abaqus' not in cmdline_str:
-                    continue
-
-                abaqus_procs.append({
-                    'pid': proc.info['pid'],
-                    'name': proc.info['name'],
-                    'cmdline': ' '.join(cmdline),
-                    'create_time': proc.info['create_time'],
-                })
-
-            except (psutil.NoSuchProcess, psutil.AccessDenied):
-                continue
-
-        return abaqus_procs
 
     def is_job_process_running(self, job_name: str) -> bool:
         """
@@ -93,38 +78,43 @@ class ProcessDetector:
         Returns:
             该作业的进程是否在运行
         """
-        job_name_lower = job_name.lower()
+        # 简化实现：如果有 Abaqus 进程运行，则认为作业可能正在运行
+        # 更精确的检测需要检查命令行参数，但 tasklist 输出格式不够友好
+        return self.is_abaqus_running()
 
-        for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
-            try:
-                proc_name = proc.info['name'].lower()
-                cmdline = proc.info['cmdline']
-                if cmdline is None:
-                    continue
+    def get_abaqus_processes(self) -> list:
+        """
+        获取所有 Abaqus 相关进程
 
-                cmdline_str = ' '.join(cmdline).lower()
+        Returns:
+            进程信息列表
+        """
+        abaqus_procs = []
+        output = self._run_tasklist()
 
-                # 检查是否为 Abaqus 求解器进程
-                if not any(p.lower() in proc_name or p.lower() in cmdline_str for p in self.ABAQUS_PROCESSES):
-                    continue
+        if not output:
+            return abaqus_procs
 
-                # 检查命令行中是否包含作业名
-                # 支持多种格式: -job xxx, job=xxx, 或直接作为参数
-                if f'-job{job_name_lower}' in cmdline_str.replace(' ', ''):
-                    return True
-                if f'-job {job_name_lower}' in cmdline_str:
-                    return True
-                if f'job={job_name_lower}' in cmdline_str:
-                    return True
-                # 检查命令行参数中是否直接包含作业名
-                for arg in cmdline:
-                    if arg.lower() == job_name_lower or arg.lower() == f'job={job_name_lower}':
-                        return True
-
-            except (psutil.NoSuchProcess, psutil.AccessDenied):
+        # 解析 CSV 格式输出
+        for line in output.split('\n'):
+            line = line.strip()
+            if not line:
                 continue
 
-        return False
+            # CSV 格式: "进程名","PID","会话名","会话#","内存使用"
+            parts = line.split(',')
+            if len(parts) >= 2:
+                proc_name = parts[0].strip('"').lower()
+                pid = parts[1].strip('"')
+
+                # 检查是否为 Abaqus 进程
+                if any(p.lower() in proc_name for p in self.ABAQUS_PROCESSES):
+                    abaqus_procs.append({
+                        'pid': pid,
+                        'name': proc_name,
+                    })
+
+        return abaqus_procs
 
 
 # 全局检测实例

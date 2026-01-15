@@ -5,7 +5,7 @@
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 
 class StaParser:
@@ -37,9 +37,11 @@ class StaParser:
                 "total_time": float,   # Total Time/Freq
                 "step_time": float,    # Step Time/LPF
                 "inc_time": float,     # Inc of Step Time/LPF
+                "attempts": int,       # 尝试次数
                 "start_time": datetime, # 作业开始时间
                 "status": str,         # 作业状态
                 "last_line": str,      # 最后一行内容
+                "raw_lines": List[str], # 最后几行原始数据
             }
         """
         result = {
@@ -48,9 +50,11 @@ class StaParser:
             "total_time": 0.0,
             "step_time": 0.0,
             "inc_time": 0.0,
+            "attempts": 0,
             "start_time": None,
             "status": "unknown",
             "last_line": "",
+            "raw_lines": [],
         }
 
         if not self.sta_file.exists():
@@ -71,8 +75,12 @@ class StaParser:
             result["last_line"] = last_line
             result["status"] = self._get_status_from_line(last_line)
 
+            # 获取最后15行非空行
+            last_lines = [line.rstrip() for line in lines[-15:] if line.strip()]
+            result["raw_lines"] = last_lines[-5:]  # 保留最后5行
+
             # 解析进度数据（倒序查找最后一行数据）
-            for line in reversed(lines):
+            for line in reversed(last_lines):
                 line = line.strip()
                 if self._is_data_line(line):
                     data = self._parse_data_line(line)
@@ -144,8 +152,14 @@ class StaParser:
         line = line.strip()
         if not line:
             return False
-        # 跳过标题行
-        if any(keyword in line.upper() for keyword in ["STEP", "INC", "SEVERE", "SUMMARY", "ITER"]):
+        # 跳过标题行和状态行
+        line_upper = line.upper()
+        skip_keywords = [
+            "STEP", "INC", "SEVERE", "SUMMARY", "ITER",
+            "ABAQUS", "DATE", "TIME", "COMPLETED", "ANALYSIS",
+            "DISCON", "FREQ", "MONITOR", "RIKS", "TOTAL",
+        ]
+        if any(keyword in line_upper for keyword in skip_keywords):
             return False
         # 检查是否以数字开头
         return line[0].isdigit()
@@ -161,10 +175,11 @@ class StaParser:
         try:
             # 分割空白字符
             parts = line.split()
-            if len(parts) >= 8:
+            if len(parts) >= 7:
                 return {
                     "step": int(parts[0]),
                     "increment": int(parts[1]),
+                    "attempts": int(parts[2]) if len(parts) > 2 else 0,
                     "total_time": float(parts[6]),      # Total Time/Freq (第7列)
                     "step_time": float(parts[7]) if len(parts) > 7 else 0.0,   # Step Time/LPF (第8列)
                     "inc_time": float(parts[8]) if len(parts) > 8 else 0.0,   # Inc of Step Time/LPF (第9列)
@@ -222,3 +237,39 @@ class StaParser:
         parser = cls(sta_file)
         result = parser.parse()
         return result.get("start_time")
+
+
+def get_job_info(sta_path: Path) -> str:
+    """
+    获取作业详细信息
+
+    Args:
+        sta_path: .sta 文件路径
+
+    Returns:
+        格式化的作业信息
+    """
+    info_lines = []
+
+    if sta_path.exists():
+        # 文件大小
+        size_mb = sta_path.stat().st_size / (1024 * 1024)
+        info_lines.append(f"STA文件: {size_mb:.2f} MB")
+
+        # 修改时间
+        mtime = datetime.fromtimestamp(sta_path.stat().st_mtime)
+        info_lines.append(f"最后修改: {mtime.strftime('%Y-%m-%d %H:%M:%S')}")
+
+    # 检查 .odb 文件
+    odb_path = sta_path.with_suffix('.odb')
+    if odb_path.exists():
+        odb_size_mb = odb_path.stat().st_size / (1024 * 1024)
+        info_lines.append(f"ODB文件: {odb_size_mb:.2f} MB")
+
+    # 检查 .dat 文件
+    dat_path = sta_path.with_suffix('.dat')
+    if dat_path.exists():
+        dat_size_mb = dat_path.stat().st_size / (1024 * 1024)
+        info_lines.append(f"DAT文件: {dat_size_mb:.2f} MB")
+
+    return '\n'.join(info_lines) if info_lines else "无额外信息"

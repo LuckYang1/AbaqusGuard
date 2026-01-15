@@ -3,13 +3,15 @@
 通过监控 .lck 文件检测 Abaqus 作业的开始和结束
 """
 import socket
+import time
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set
 
 from src.config.settings import get_settings
-from src.core.progress_parser import StaParser
+from src.core.progress_parser import StaParser, get_job_info
 from src.core.process_detector import get_process_detector
+from src.feishu.webhook_client import get_webhook_client
 from src.models.job import JobInfo, JobStatus
 
 
@@ -20,9 +22,10 @@ class JobDetector:
         """初始化检测器"""
         self.settings = get_settings()
         self.process_detector = get_process_detector()
+        self.webhook = get_webhook_client()
         self.running_jobs: Dict[str, JobInfo] = {}  # 正在运行的作业
         self.completed_jobs: List[JobInfo] = []      # 已完成的作业
-        self.warned_orphan_lck: set = set()          # 已警告的孤立 .lck 文件
+        self.warned_orphan_lck: Set[str] = set()     # 已警告的孤立 .lck 文件
 
     def scan_directories(self) -> List[JobInfo]:
         """
@@ -50,6 +53,7 @@ class JobDetector:
 
         # 查找所有 .lck 文件
         lck_files = list(directory.glob("*.lck"))
+        current_lck = {f.stem for f in lck_files}  # 当前存在的 .lck 文件集合
 
         for lck_file in lck_files:
             # .lck 文件名格式为 {job_name}.lck
@@ -64,6 +68,19 @@ class JobDetector:
                 job = self.running_jobs[job_key]
                 self._update_job_progress(job, sta_file)
 
+                # 检查作业是否变成孤立（进程停止但 .lck 未删除）
+                if self.settings.ENABLE_PROCESS_DETECTION:
+                    abaqus_running = self.process_detector.is_abaqus_running()
+                    if not abaqus_running:
+                        lck_age = self._get_lck_age(directory, job_name)
+                        if lck_age >= self.settings.LCK_GRACE_PERIOD:
+                            # 超过宽限期且无进程，判定为孤立
+                            self._handle_orphan_job(job, sta_file)
+                            # 从孤立列表移除（避免重复处理）
+                            self.warned_orphan_lck.discard(job_key)
+                            self.running_jobs.pop(job_key, None)
+                            continue
+
                 # 检查是否已完成
                 if not lck_file.exists():
                     # .lck 文件被删除，作业可能完成
@@ -71,33 +88,86 @@ class JobDetector:
                 # 无论是否完成，都添加到返回列表，以便 main.py 处理
                 jobs.append(job)
             else:
-                # 新作业
-                job = self._create_new_job(job_name, directory, sta_file)
-                if job:
-                    self.running_jobs[job_key] = job
-                    jobs.append(job)
+                # 新作业 - 检查是否在孤立列表中
+                if job_key in self.warned_orphan_lck:
+                    # 之前是孤立文件，检查 .lck 是否被清理
+                    if not lck_file.exists():
+                        # .lck 已被清理，从孤立列表移除
+                        self.warned_orphan_lck.discard(job_key)
+                    continue
+
+                # 检查是否应该作为新作业处理
+                should_handle = self._check_new_job(directory, job_name, lck_file)
+                if should_handle:
+                    job = self._create_new_job(job_name, directory, sta_file, lck_file)
+                    if job:
+                        self.running_jobs[job_key] = job
+                        jobs.append(job)
 
         # 检查之前运行的作业是否已完成
         self._check_completed_jobs(directory)
 
         return jobs
 
-    def _create_new_job(self, job_name: str, work_dir: Path, sta_file: Path) -> Optional[JobInfo]:
+    def _check_new_job(self, directory: Path, job_name: str, lck_file: Path) -> bool:
+        """
+        检查新 .lck 文件是否应该作为新作业处理
+
+        Args:
+            directory: 目录路径
+            job_name: 作业名称
+            lck_file: .lck 文件路径
+
+        Returns:
+            是否应该作为新作业处理
+        """
+        if not self.settings.ENABLE_PROCESS_DETECTION:
+            return True
+
+        abaqus_running = self.process_detector.is_abaqus_running()
+
+        if abaqus_running:
+            # 进程在运行，作为新作业处理
+            return True
+        else:
+            # 进程未运行，检查 .lck 文件年龄
+            lck_age = self._get_lck_age(directory, job_name)
+            if lck_age < self.settings.LCK_GRACE_PERIOD:
+                # 在宽限期内，假设是新作业（进程可能还在启动）
+                if self.settings.VERBOSE:
+                    print(f"新 .lck 文件 ({int(lck_age)}秒)，等待进程启动: {job_name}")
+                return True
+            else:
+                # 超过宽限期，判定为孤立文件
+                if self.settings.VERBOSE:
+                    print(f"检测到孤立 .lck 文件 (已存在 {int(lck_age)} 秒): {job_name}")
+                    print(f"   该文件将被忽略，请手动删除")
+                job_key = f"{job_name}@{directory}"
+                self.warned_orphan_lck.add(job_key)
+                return False
+
+    def _get_lck_age(self, directory: Path, job_name: str) -> float:
+        """
+        获取 .lck 文件的年龄（自创建以来的秒数）
+
+        Args:
+            directory: 目录路径
+            job_name: 作业名称
+
+        Returns:
+            .lck 文件存在的秒数，如果文件不存在则返回 0
+        """
+        lck_path = directory / f"{job_name}.lck"
+        if lck_path.exists():
+            create_time = lck_path.stat().st_ctime
+            return time.time() - create_time
+        return 0
+
+    def _create_new_job(self, job_name: str, work_dir: Path, sta_file: Path, lck_file: Path) -> Optional[JobInfo]:
         """创建新作业信息"""
         try:
-            # 检查作业进程是否正在运行
-            if not self.process_detector.is_job_process_running(job_name):
-                orphan_key = f"{job_name}@{work_dir}"
-                if orphan_key not in self.warned_orphan_lck:
-                    self.warned_orphan_lck.add(orphan_key)
-                    if self.settings.VERBOSE:
-                        print(f"跳过孤立 .lck 文件: {job_name} @ {work_dir} (未检测到对应进程)")
-                return None
-
-            # 从 .sta 文件解析开始时间
-            start_time = StaParser.extract_start_time(sta_file)
-            if not start_time:
-                start_time = datetime.now()
+            # 使用 .lck 文件的创建时间作为作业开始时间
+            start_time = datetime.fromtimestamp(lck_file.stat().st_ctime)
 
             job = JobInfo(
                 name=job_name,
@@ -163,6 +233,50 @@ class JobDetector:
 
         except Exception as e:
             print(f"完成作业处理失败 {job.name}: {e}")
+
+    def _handle_orphan_job(self, job: JobInfo, sta_file: Path):
+        """
+        处理孤立作业（进程停止但 .lck 未删除）
+
+        Args:
+            job: 作业信息
+            sta_file: .sta 文件路径
+        """
+        try:
+            # 计算耗时
+            duration_str = "未知"
+            if job.start_time:
+                duration = datetime.now() - job.start_time
+                hours, remainder = divmod(int(duration.total_seconds()), 3600)
+                minutes, seconds = divmod(remainder, 60)
+                duration_str = f"{hours}小时 {minutes}分钟 {seconds}秒"
+
+            # 分析 .sta 文件状态
+            status_str = StaParser.get_status_from_file(sta_file)
+            job_info = get_job_info(sta_file)
+
+            # 标记作业状态
+            job.mark_completed(JobStatus.ABORTED, "Abaqus 进程已停止，但 .lck 文件仍存在")
+
+            if self.settings.VERBOSE:
+                print(f"作业异常终止: {job.name}")
+                print(f"   Abaqus 进程已停止，但 .lck 文件仍存在")
+                print(f"   运行时长: {duration_str}")
+
+            # 发送孤立作业警告通知
+            if self.webhook:
+                self.webhook.send_orphan_job_warning(job, job_info, duration_str)
+
+            # 获取 ODB 文件大小
+            self._update_odb_size(job)
+
+            # 添加到已完成列表
+            job_key = f"{job.name}@{job.work_dir}"
+            self.running_jobs.pop(job_key, None)
+            self.completed_jobs.append(job)
+
+        except Exception as e:
+            print(f"处理孤立作业失败 {job.name}: {e}")
 
     def _update_odb_size(self, job: JobInfo):
         """更新 ODB 文件大小"""

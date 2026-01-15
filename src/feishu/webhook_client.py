@@ -152,6 +152,33 @@ ODB大小: {job.odb_size_mb} MB"""
 错误信息: {error}"""
         return self.send("[异常] Abaqus 计算错误", content, is_success=False)
 
+    def send_orphan_job_warning(self, job: JobInfo, job_info: str, duration_str: str) -> bool:
+        """
+        发送孤立作业警告通知
+
+        Args:
+            job: 作业信息
+            job_info: 文件信息（从 get_job_info 获取）
+            duration_str: 运行时长字符串
+        """
+        content = f"""作业名称: {job.name}
+工作目录: {job.work_dir}
+
+检测原因:
+Abaqus 求解器进程已停止运行，但 `.lck` 文件仍然存在。
+作业可能被手动终止或异常退出。
+
+最后状态: {job.result}
+
+运行时长: {duration_str}
+
+文件信息:
+{job_info}
+
+提示: 请检查 .msg 和 .dat 文件了解详细信息
+如需清理，请手动删除 .lck 文件"""
+        return self.send("⚠️ Abaqus 作业异常终止", content, is_success=False)
+
 
 # 全局客户端实例
 _client: WebhookClient = None
