@@ -121,6 +121,26 @@ class WebhookClient:
         except Exception:
             return ""
 
+    def _format_progress_bar(self, current: float, total: float, length: int = 10) -> str:
+        """
+        生成文本进度条
+
+        Args:
+            current: 当前进度
+            total: 总时间
+            length: 进度条长度
+
+        Returns:
+            进度条字符串，如 "▓▓▓▓▓▓░░░░ 60.0% (18.5 / 31.0)"
+        """
+        if total <= 0:
+            return ""
+
+        percent = min(current / total, 1.0)
+        filled = int(percent * length)
+        bar = "▓" * filled + "░" * (length - filled)
+        return f"{bar} {percent * 100:.1f}% ({current:.2f} / {total:.2f})"
+
     def send_job_progress(self, job: JobInfo) -> bool:
         """发送进度更新通知"""
         duration = job.duration or "计算中"
@@ -129,11 +149,18 @@ class WebhookClient:
         sta_lines = self._get_sta_last_lines(job, count=3)
         sta_section = f"\n.sta 最后记录:\n{sta_lines}" if sta_lines else ""
 
+        # 生成进度条
+        progress_bar = self._format_progress_bar(job.total_time, job.total_step_time)
+        if progress_bar:
+            progress_line = f"\n进度: {progress_bar}"
+        else:
+            progress_line = ""
+
         content = f"""作业名称: {job.name}
 已运行: {duration}
 
 当前进度:
-Step: {job.step} | Increment: {job.increment} | Step Time: {job.step_time:.3f} | Inc Time: {job.inc_time:.4f} | Total Time: {job.total_time:.2f}{sta_section}"""
+Step: {job.step} | Increment: {job.increment} | Step Time: {job.step_time:.3f} | Inc Time: {job.inc_time:.4f} | Total Time: {job.total_time:.2f}{progress_line}{sta_section}"""
         return self.send("[Abaqus] 计算进度", content, is_success=True)
 
     def send_job_complete(self, job: JobInfo) -> bool:

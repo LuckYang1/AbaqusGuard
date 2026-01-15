@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Set
 
 from src.config.settings import get_settings
+from src.core.inp_parser import parse_total_step_time
 from src.core.progress_parser import StaParser, get_job_info
 from src.core.process_detector import get_process_detector
 from src.feishu.webhook_client import get_webhook_client
@@ -191,6 +192,12 @@ class JobDetector:
             start_time=start_time,
             status=JobStatus.RUNNING,
         )
+
+        # 解析 .inp 文件获取总分析步时间
+        inp_file = directory / f"{job_name}.inp"
+        job.total_step_time = parse_total_step_time(inp_file)
+        if self.settings.VERBOSE and job.total_step_time > 0:
+            print(f"  分析步总时间: {job.total_step_time}")
 
         # 解析初始进度
         self._update_job_progress(job, directory)
