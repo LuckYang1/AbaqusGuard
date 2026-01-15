@@ -9,6 +9,7 @@ from typing import Dict, List, Optional
 
 from src.config.settings import get_settings
 from src.core.progress_parser import StaParser
+from src.core.process_detector import get_process_detector
 from src.models.job import JobInfo, JobStatus
 
 
@@ -18,6 +19,7 @@ class JobDetector:
     def __init__(self):
         """初始化检测器"""
         self.settings = get_settings()
+        self.process_detector = get_process_detector()
         self.running_jobs: Dict[str, JobInfo] = {}  # 正在运行的作业
         self.completed_jobs: List[JobInfo] = []      # 已完成的作业
 
@@ -81,6 +83,12 @@ class JobDetector:
     def _create_new_job(self, job_name: str, work_dir: Path, sta_file: Path) -> Optional[JobInfo]:
         """创建新作业信息"""
         try:
+            # 检查作业进程是否正在运行
+            if not self.process_detector.is_job_process_running(job_name):
+                if self.settings.VERBOSE:
+                    print(f"跳过孤立 .lck 文件: {job_name} @ {work_dir} (未检测到对应进程)")
+                return None
+
             # 从 .sta 文件解析开始时间
             start_time = StaParser.extract_start_time(sta_file)
             if not start_time:
