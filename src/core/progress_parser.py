@@ -165,9 +165,9 @@ class StaParser:
                 return {
                     "step": int(parts[0]),
                     "increment": int(parts[1]),
-                    "total_time": float(parts[7]),
-                    "step_time": float(parts[8]) if len(parts) > 8 else 0.0,
-                    "inc_time": float(parts[9]) if len(parts) > 9 else 0.0,
+                    "total_time": float(parts[6]),      # Total Time/Freq (第7列)
+                    "step_time": float(parts[7]) if len(parts) > 7 else 0.0,   # Step Time/LPF (第8列)
+                    "inc_time": float(parts[8]) if len(parts) > 8 else 0.0,   # Inc of Step Time/LPF (第9列)
                 }
         except (ValueError, IndexError):
             pass

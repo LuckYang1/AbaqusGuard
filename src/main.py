@@ -34,6 +34,7 @@ class AbaqusMonitor:
         self._log("=== Abaqus 作业监控启动 ===")
         self._log(f"监控目录: {self.settings.WATCH_DIRS}")
         self._log(f"轮询间隔: {self.settings.POLL_INTERVAL} 秒")
+        self._log(f"进度推送间隔: {self.settings.PROGRESS_NOTIFY_INTERVAL} 秒")
 
         # 初始化多维表格
         if self.settings.ENABLE_FEISHU_BITABLE:
@@ -123,6 +124,7 @@ class AbaqusMonitor:
         tracked.step = current.step
         tracked.increment = current.increment
         tracked.total_time = current.total_time
+        tracked.step_time = current.step_time
         tracked.status = current.status
 
     def _check_progress_notify(self, job: JobInfo):
@@ -132,13 +134,18 @@ class AbaqusMonitor:
 
         job_key = self._get_job_key(job)
         last_notify = self.last_progress_notify.get(job_key)
+        now = datetime.now()
 
         if not last_notify:
-            # 第一次运行，等待一段时间后再通知
-            self.last_progress_notify[job_key] = datetime.now()
+            # 第一次运行，立即发送初始进度通知
+            self.last_progress_notify[job_key] = now
+            self._log(f"进度更新: {job.name} - Step:{job.step} Inc:{job.increment}")
+
+            if self.settings.FEISHU_WEBHOOK_URL:
+                self.webhook.send_job_progress(job)
             return
 
-        elapsed = (datetime.now() - last_notify).total_seconds()
+        elapsed = (now - last_notify).total_seconds()
 
         if elapsed >= self.settings.PROGRESS_NOTIFY_INTERVAL:
             self._log(f"进度更新: {job.name} - Step:{job.step} Inc:{job.increment}")
@@ -146,7 +153,7 @@ class AbaqusMonitor:
             if self.settings.FEISHU_WEBHOOK_URL:
                 self.webhook.send_job_progress(job)
 
-            self.last_progress_notify[job_key] = datetime.now()
+            self.last_progress_notify[job_key] = now
 
     def _get_job_key(self, job: JobInfo) -> str:
         """获取作业唯一标识"""

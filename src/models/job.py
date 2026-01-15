@@ -28,6 +28,7 @@ class JobInfo:
     odb_size_mb: float = 0.0               # ODB大小
     total_time: float = 0.0                # .sta中的Total Time
     frequency: float = 0.0                 # .sta中的Frequency
+    step_time: float = 0.0                 # .sta中的Step Time
     step: int = 0                          # 当前Step
     increment: int = 0                     # 当前Increment
 

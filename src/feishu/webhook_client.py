@@ -3,6 +3,7 @@
 """
 import socket
 from datetime import datetime
+from pathlib import Path
 
 import requests
 
@@ -91,15 +92,48 @@ class WebhookClient:
         content = f"""作业名称: {job.name}
 工作目录: {job.work_dir}
 计算机: {job.computer}
-开始时间: {job.start_time.strftime('%Y-%m-%d %H:%M:%S')}"""
+开始时间: {job.start_time.strftime('%Y-%m-%d %H:%M:%S')}
+
+正在计算中，请等待完成通知..."""
         return self.send("[Abaqus] 计算开始", content, is_success=True)
+
+    def _get_sta_last_lines(self, job: JobInfo, count: int = 3) -> str:
+        """获取 .sta 文件的最后几行"""
+        try:
+            sta_file = Path(job.work_dir) / f"{job.name}.sta"
+            if not sta_file.exists():
+                return ""
+
+            with open(sta_file, "r", encoding="utf-8", errors="ignore") as f:
+                lines = f.readlines()
+
+            # 获取最后几行数据行（以数字开头）
+            data_lines = []
+            for line in reversed(lines):
+                line = line.strip()
+                if line and line[0].isdigit():
+                    data_lines.insert(0, line)
+                    if len(data_lines) >= count:
+                        break
+
+            return "\n".join(data_lines) if data_lines else ""
+
+        except Exception:
+            return ""
 
     def send_job_progress(self, job: JobInfo) -> bool:
         """发送进度更新通知"""
         duration = job.duration or "计算中"
+
+        # 获取 .sta 文件最后几行
+        sta_lines = self._get_sta_last_lines(job, count=3)
+        sta_section = f"\n.sta 最后记录:\n{sta_lines}" if sta_lines else ""
+
         content = f"""作业名称: {job.name}
 已运行: {duration}
-当前进度: Step: {job.step} | Increment: {job.increment} | Total Time: {job.total_time}"""
+
+当前进度:
+Step: {job.step} | Increment: {job.increment} | Step Time: {job.step_time:.3f} | Total Time: {job.total_time:.2f}{sta_section}"""
         return self.send("[Abaqus] 计算进度", content, is_success=True)
 
     def send_job_complete(self, job: JobInfo) -> bool:

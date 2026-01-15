@@ -22,6 +22,7 @@ class JobDetector:
         self.process_detector = get_process_detector()
         self.running_jobs: Dict[str, JobInfo] = {}  # 正在运行的作业
         self.completed_jobs: List[JobInfo] = []      # 已完成的作业
+        self.warned_orphan_lck: set = set()          # 已警告的孤立 .lck 文件
 
     def scan_directories(self) -> List[JobInfo]:
         """
@@ -67,7 +68,8 @@ class JobDetector:
                 if not lck_file.exists():
                     # .lck 文件被删除，作业可能完成
                     self._finalize_job(job, sta_file)
-                    jobs.append(job)
+                # 无论是否完成，都添加到返回列表，以便 main.py 处理
+                jobs.append(job)
             else:
                 # 新作业
                 job = self._create_new_job(job_name, directory, sta_file)
@@ -85,8 +87,11 @@ class JobDetector:
         try:
             # 检查作业进程是否正在运行
             if not self.process_detector.is_job_process_running(job_name):
-                if self.settings.VERBOSE:
-                    print(f"跳过孤立 .lck 文件: {job_name} @ {work_dir} (未检测到对应进程)")
+                orphan_key = f"{job_name}@{work_dir}"
+                if orphan_key not in self.warned_orphan_lck:
+                    self.warned_orphan_lck.add(orphan_key)
+                    if self.settings.VERBOSE:
+                        print(f"跳过孤立 .lck 文件: {job_name} @ {work_dir} (未检测到对应进程)")
                 return None
 
             # 从 .sta 文件解析开始时间
@@ -121,6 +126,7 @@ class JobDetector:
             job.step = result.get("step", 0)
             job.increment = result.get("increment", 0)
             job.total_time = result.get("total_time", 0.0)
+            job.step_time = result.get("step_time", 0.0)
 
         except Exception as e:
             if self.settings.VERBOSE:
