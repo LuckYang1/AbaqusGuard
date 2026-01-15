@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__web-reader__webReader",
+      "Bash(dir:*)",
+      "Bash(more:*)",
+      "Bash(uv init:*)",
+      "Bash(uv sync:*)",
+      "Bash(python:*)",
+      "Bash(uv run python:*)"
+    ]
+  }
+}
