@@ -19,7 +19,7 @@ class WebhookClient:
         self.settings = get_settings()
         self.webhook_url = self.settings.FEISHU_WEBHOOK_URL
 
-    def send(self, title: str, content: str, is_success: bool = True) -> bool:
+    def send(self, title: str, content: str, is_success: bool = True, job: JobInfo = None) -> bool:
         """
         发送飞书集成流程 Webhook 消息
 
@@ -27,6 +27,7 @@ class WebhookClient:
             title: 消息标题
             content: 消息内容
             is_success: 是否成功
+            job: 作业信息（可选），用于添加结构化字段
 
         Returns:
             是否发送成功
@@ -58,6 +59,21 @@ class WebhookClient:
             # 完整消息文本，方便在流程中直接使用
             "message": full_message
         }
+
+        # 添加结构化作业字段
+        if job:
+            payload.update({
+                "作业名称": job.name,
+                "工作目录": job.work_dir,
+                "计算机": job.computer,
+                "开始时间": job.start_time.strftime('%Y-%m-%d %H:%M:%S') if job.start_time else "",
+                "结束时间": job.end_time.strftime('%Y-%m-%d %H:%M:%S') if job.end_time else "",
+                "耗时": job.duration or "",
+                "进度": f"Step:{job.step} Inc:{job.increment}",
+                "状态": job.status.value,
+                "ODB大小(MB)": job.odb_size_mb,
+                "TOTALTIME/FREQ": str(job.total_time),
+            })
 
         if self.settings.VERBOSE:
             print(f"发送 Webhook: {title}")
@@ -95,7 +111,7 @@ class WebhookClient:
 开始时间: {job.start_time.strftime('%Y-%m-%d %H:%M:%S')}
 
 正在计算中，请等待完成通知..."""
-        return self.send("[Abaqus] 计算开始", content, is_success=True)
+        return self.send("[Abaqus] 计算开始", content, is_success=True, job=job)
 
     def _get_sta_last_lines(self, job: JobInfo, count: int = 3) -> str:
         """获取 .sta 文件的最后几行"""
@@ -161,7 +177,7 @@ class WebhookClient:
 
 当前进度:
 Step: {job.step} | Increment: {job.increment} | Step Time: {job.step_time:.3f} | Inc Time: {job.inc_time:.4f} | Total Time: {job.total_time:.2f}{progress_line}{sta_section}"""
-        return self.send("[Abaqus] 计算进度", content, is_success=True)
+        return self.send("[Abaqus] 计算进度", content, is_success=True, job=job)
 
     def send_job_complete(self, job: JobInfo) -> bool:
         """发送作业完成通知"""
@@ -171,14 +187,14 @@ Step: {job.step} | Increment: {job.increment} | Step Time: {job.step_time:.3f} |
 计算耗时: {job.duration or '未知'}
 Total Time: {job.total_time:.2f}
 ODB大小: {job.odb_size_mb} MB"""
-        return self.send(f"[{job.status.value}] Abaqus 计算完成", content, is_success=is_success)
+        return self.send(f"[{job.status.value}] Abaqus 计算完成", content, is_success=is_success, job=job)
 
     def send_job_error(self, job: JobInfo, error: str) -> bool:
         """发送异常通知"""
         content = f"""作业名称: {job.name}
 工作目录: {job.work_dir}
 错误信息: {error}"""
-        return self.send("[异常] Abaqus 计算错误", content, is_success=False)
+        return self.send("[异常] Abaqus 计算错误", content, is_success=False, job=job)
 
     def send_orphan_job_warning(self, job: JobInfo, job_info: str, duration_str: str) -> bool:
         """
@@ -206,7 +222,7 @@ Total Time: {job.total_time:.2f}
 
 提示: 请检查 .msg 和 .dat 文件了解详细信息
 如需清理，请手动删除 .lck 文件"""
-        return self.send("⚠️ Abaqus 作业异常终止", content, is_success=False)
+        return self.send("⚠️ Abaqus 作业异常终止", content, is_success=False, job=job)
 
 
 # 全局客户端实例

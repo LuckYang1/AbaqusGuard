@@ -9,7 +9,7 @@ from typing import Dict, List, Optional
 
 
 class StaParser:
-    """Abaqus .sta 文件解析器"""
+    """Abaqus .sta 文件解析器，支持 Standard 和 Explicit 两种格式"""
 
     # 状态判断关键字
     STATUS_SUCCESS = "THE ANALYSIS HAS COMPLETED SUCCESSFULLY"
@@ -24,10 +24,11 @@ class StaParser:
             sta_file: .sta 文件路径
         """
         self.sta_file = Path(sta_file)
+        self.is_explicit = False  # 是否为 Explicit 分析
 
     def parse(self) -> Dict[str, any]:
         """
-        解析 .sta 文件
+        解析 .sta 文件，自动识别 Standard 和 Explicit 格式
 
         Returns:
             包含进度信息的字典:
@@ -36,12 +37,13 @@ class StaParser:
                 "increment": int,      # 当前Increment
                 "total_time": float,   # Total Time/Freq
                 "step_time": float,    # Step Time/LPF
-                "inc_time": float,     # Inc of Step Time/LPF
+                "inc_time": float,     # Inc of Step Time/LPF (Standard) 或 Stable Increment (Explicit)
                 "attempts": int,       # 尝试次数
                 "start_time": datetime, # 作业开始时间
                 "status": str,         # 作业状态
                 "last_line": str,      # 最后一行内容
                 "raw_lines": List[str], # 最后几行原始数据
+                "is_explicit": bool,   # 是否为 Explicit 分析
             }
         """
         result = {
@@ -55,6 +57,7 @@ class StaParser:
             "status": "unknown",
             "last_line": "",
             "raw_lines": [],
+            "is_explicit": False,
         }
 
         if not self.sta_file.exists():
@@ -67,16 +70,26 @@ class StaParser:
             if not lines:
                 return result
 
-            # 解析第一行获取开始时间
-            result["start_time"] = self._parse_start_time(lines[0])
+            # 检测是否为 Explicit 分析（第一行包含 "Abaqus/Explicit"）
+            first_line = lines[0] if lines else ""
+            self.is_explicit = "ABAQUS/EXPLICIT" in first_line.upper()
+            result["is_explicit"] = self.is_explicit
 
-            # 解析最后一行状态
-            last_line = lines[-1].strip() if lines else ""
+            # 解析第一行获取开始时间
+            result["start_time"] = self._parse_start_time(first_line)
+
+            # 解析最后一行状态（需要找到非 INSTANCE 行）
+            last_line = ""
+            for line in reversed(lines):
+                stripped = line.strip()
+                if stripped and not stripped.startswith("INSTANCE"):
+                    last_line = stripped
+                    break
             result["last_line"] = last_line
             result["status"] = self._get_status_from_line(last_line)
 
-            # 获取最后15行非空行
-            last_lines = [line.rstrip() for line in lines[-15:] if line.strip()]
+            # 获取最后30行非空行（Explicit 文件可能有更多信息行）
+            last_lines = [line.rstrip() for line in lines[-30:] if line.strip()]
             result["raw_lines"] = last_lines[-5:]  # 保留最后5行
 
             # 解析进度数据（倒序查找最后一行数据）
@@ -147,7 +160,9 @@ class StaParser:
     def _is_data_line(self, line: str) -> bool:
         """
         判断是否为数据行
-        数据行以数字开头,格式如:   1     1   1     6     0     6  0.100
+
+        Standard 格式:   1     1   1     6     0     6  0.100
+        Explicit 格式:   2528254  1.415E+00 1.415E+00  02:20:34 2.079E-07 ...
         """
         line = line.strip()
         if not line:
@@ -158,6 +173,12 @@ class StaParser:
             "STEP", "INC", "SEVERE", "SUMMARY", "ITER",
             "ABAQUS", "DATE", "TIME", "COMPLETED", "ANALYSIS",
             "DISCON", "FREQ", "MONITOR", "RIKS", "TOTAL",
+            "INSTANCE", "DOMAIN", "OUTPUT", "FIELD", "FRAME",
+            "WARNING", "NOTE", "ERROR", "MEMORY", "SCALING",
+            "MASS", "INERTIA", "ELEMENT", "NODE", "WEIGHT",
+            "CRITICAL", "STABLE", "STATISTICS", "MEAN",
+            "PREPROCESSOR", "SOLUTION", "PROGRESS", "ORIGIN",
+            "INFORMATION", "CONTACT", "OVERCLOSURE", "PENETRAT",
         ]
         if any(keyword in line_upper for keyword in skip_keywords):
             return False
@@ -166,24 +187,46 @@ class StaParser:
 
     def _parse_data_line(self, line: str) -> Optional[Dict]:
         """
-        解析数据行
-        格式:   1     1   1     6     0     6  0.100      0.100      0.1000
-        列:     STEP  INC ATT SEVERE EQUIL TOTAL  TOTAL      STEP       INC OF
+        解析数据行，支持 Standard 和 Explicit 两种格式
+
+        Standard 格式:
+            STEP  INC ATT SEVERE EQUIL TOTAL  TOTAL      STEP       INC OF
                           DISCON ITERS ITERS  TIME/    TIME/LPF    TIME/LPF
                           ITERS               FREQ
+            1     1   1     6     0     6  0.100      0.100      0.1000
+
+        Explicit 格式:
+                      STEP     TOTAL      WALL      STABLE    CRITICAL    KINETIC      TOTAL    PERCENT
+            INCREMENT     TIME      TIME      TIME   INCREMENT     ELEMENT     ENERGY     ENERGY  CHNG MASS
+              2528254  1.415E+00 1.415E+00  02:20:34 2.079E-07       12515  3.953E+04 -8.964E+08  9.900E+03
         """
         try:
             # 分割空白字符
             parts = line.split()
-            if len(parts) >= 7:
-                return {
-                    "step": int(parts[0]),
-                    "increment": int(parts[1]),
-                    "attempts": int(parts[2]) if len(parts) > 2 else 0,
-                    "total_time": float(parts[6]),      # Total Time/Freq (第7列)
-                    "step_time": float(parts[7]) if len(parts) > 7 else 0.0,   # Step Time/LPF (第8列)
-                    "inc_time": float(parts[8]) if len(parts) > 8 else 0.0,   # Inc of Step Time/LPF (第9列)
-                }
+
+            if self.is_explicit:
+                # Explicit 格式解析
+                # 列: INCREMENT, STEP_TIME, TOTAL_TIME, WALL_TIME, STABLE_INCREMENT, CRITICAL_ELEMENT, ...
+                if len(parts) >= 6:
+                    return {
+                        "step": 1,  # Explicit 通常只有一个 step
+                        "increment": int(parts[0]),           # INCREMENT
+                        "step_time": float(parts[1]),         # STEP TIME
+                        "total_time": float(parts[2]),        # TOTAL TIME (第3列，用户需要的)
+                        "inc_time": float(parts[4]),          # STABLE INCREMENT (稳定时间增量)
+                        "attempts": 0,
+                    }
+            else:
+                # Standard 格式解析
+                if len(parts) >= 7:
+                    return {
+                        "step": int(parts[0]),
+                        "increment": int(parts[1]),
+                        "attempts": int(parts[2]) if len(parts) > 2 else 0,
+                        "total_time": float(parts[6]),      # Total Time/Freq (第7列)
+                        "step_time": float(parts[7]) if len(parts) > 7 else 0.0,   # Step Time/LPF (第8列)
+                        "inc_time": float(parts[8]) if len(parts) > 8 else 0.0,   # Inc of Step Time/LPF (第9列)
+                    }
         except (ValueError, IndexError):
             pass
 

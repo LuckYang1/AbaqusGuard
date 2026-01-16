@@ -31,6 +31,9 @@ class Settings:
     ENABLE_FEISHU_BITABLE: bool = True
     AUTO_CREATE_TABLE: bool = True
 
+    # 用户身份配置（用于创建用户拥有的表格）
+    FEISHU_USER_ACCESS_TOKEN: str = ""  # 用户访问凭证，表格将属于该用户
+
     # Abaqus 监控配置
     WATCH_DIRS: List[str] = None
     POLL_INTERVAL: int = 5
@@ -81,6 +84,7 @@ class Settings:
             FEISHU_BITABLE_APP_TOKEN=os.getenv("FEISHU_BITABLE_APP_TOKEN", ""),
             FEISHU_TABLE_ID=os.getenv("FEISHU_TABLE_ID", ""),
             FEISHU_TABLE_NAME=os.getenv("FEISHU_TABLE_NAME", "Abaqus作业日志"),
+            FEISHU_USER_ACCESS_TOKEN=os.getenv("FEISHU_USER_ACCESS_TOKEN", ""),
             WATCH_DIRS=None,  # 在 __post_init__ 中处理
         )
 
