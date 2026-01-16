@@ -7,7 +7,9 @@
       "Bash(uv init:*)",
       "Bash(uv sync:*)",
       "Bash(python:*)",
-      "Bash(uv run python:*)"
+      "Bash(uv run python:*)",
+      "Bash(git -C \"C:\\\\Users\\\\YSY\\\\Desktop\\\\FS-ABAQUS\" status)",
+      "Bash(git -C \"C:\\\\Users\\\\YSY\\\\Desktop\\\\FS-ABAQUS\" diff --stat)"
     ]
   }
 }
