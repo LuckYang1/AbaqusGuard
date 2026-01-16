@@ -173,6 +173,7 @@ class WebhookClient:
             progress_line = ""
 
         content = f"""作业名称: {job.name}
+工作目录: {job.work_dir}
 已运行: {duration}
 
 当前进度:

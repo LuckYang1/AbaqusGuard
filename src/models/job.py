@@ -33,9 +33,6 @@ class JobInfo:
     step: int = 0                          # 当前Step
     increment: int = 0                     # 当前Increment
 
-    # 飞书多维表格记录ID
-    record_id: Optional[str] = None        # 多维表格记录ID
-
     # 是否为孤立作业（进程停止但 .lck 未删除）
     is_orphan: bool = False                # 孤立作业标记
 

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-FS-ABAQUS is an Abaqus job monitoring script that monitors simulation job status and sends notifications to Feishu (Lark). It tracks jobs by monitoring `.lck` files, parses `.sta` files for progress, and logs results to Feishu Bitable (multi-dimensional spreadsheet).
+FS-ABAQUS is an Abaqus job monitoring script that monitors simulation job status and sends notifications to Feishu (Lark). It tracks jobs by monitoring `.lck` files and parses `.sta` files for progress.
 
 ## Commands
 
@@ -30,7 +30,6 @@ uv run pytest
 2. `JobDetector` (src/core/job_detector.py) scans directories for `.lck` files using set operations to detect new/ended jobs
 3. `StaParser` (src/core/progress_parser.py) parses Abaqus `.sta` files for progress (step, increment, total time)
 4. Notifications sent via `WebhookClient` (src/feishu/webhook_client.py)
-5. Records logged to `BitableClient` (src/feishu/bitable_client.py)
 
 ### Key Detection Logic (job_detector.py)
 - **New jobs**: `effective_lck - previous_jobs`
@@ -43,13 +42,12 @@ uv run pytest
 - Job name, work directory, computer name
 - Start/end time, status (RUNNING/SUCCESS/FAILED/ABORTED)
 - Progress from .sta: step, increment, total_time, step_time, inc_time
-- ODB file size, Feishu record_id
+- ODB file size
 
 ### Configuration
 All settings loaded from environment variables via `Settings` class (src/config/settings.py):
 - `FEISHU_APP_ID`, `FEISHU_APP_SECRET` - Feishu app credentials
 - `FEISHU_WEBHOOK_URL` - Webhook endpoint for notifications
-- `FEISHU_BITABLE_APP_TOKEN`, `FEISHU_TABLE_ID` - Bitable configuration
 - `WATCH_DIRS` - Comma-separated list of directories to monitor
 - `POLL_INTERVAL` - Scan interval in seconds (default: 5)
 - `PROGRESS_NOTIFY_INTERVAL` - Progress notification interval in seconds (default: 3600)

@@ -4,7 +4,6 @@
 """
 import os
 from dataclasses import dataclass
-from pathlib import Path
 from typing import List
 
 from dotenv import load_dotenv
@@ -24,16 +23,6 @@ class Settings:
     # 飞书 Webhook 配置
     FEISHU_WEBHOOK_URL: str = ""
 
-    # 多维表格配置
-    FEISHU_BITABLE_APP_TOKEN: str = ""
-    FEISHU_TABLE_ID: str = ""
-    FEISHU_TABLE_NAME: str = "Abaqus作业日志"
-    ENABLE_FEISHU_BITABLE: bool = True
-    AUTO_CREATE_TABLE: bool = True
-
-    # 用户身份配置（用于创建用户拥有的表格）
-    FEISHU_USER_ACCESS_TOKEN: str = ""  # 用户访问凭证，表格将属于该用户
-
     # Abaqus 监控配置
     WATCH_DIRS: List[str] = None
     POLL_INTERVAL: int = 5
@@ -49,12 +38,6 @@ class Settings:
             self.WATCH_DIRS = [d.strip() for d in watch_dirs_str.split(",") if d.strip()]
 
         # 转换布尔值
-        self.ENABLE_FEISHU_BITABLE = self._parse_bool(
-            os.getenv("ENABLE_FEISHU_BITABLE", "true"), self.ENABLE_FEISHU_BITABLE
-        )
-        self.AUTO_CREATE_TABLE = self._parse_bool(
-            os.getenv("AUTO_CREATE_TABLE", "true"), self.AUTO_CREATE_TABLE
-        )
         self.VERBOSE = self._parse_bool(os.getenv("VERBOSE", "true"), self.VERBOSE)
         self.ENABLE_PROCESS_DETECTION = self._parse_bool(
             os.getenv("ENABLE_PROCESS_DETECTION", "true"), self.ENABLE_PROCESS_DETECTION
@@ -81,10 +64,6 @@ class Settings:
             FEISHU_APP_ID=os.getenv("FEISHU_APP_ID", ""),
             FEISHU_APP_SECRET=os.getenv("FEISHU_APP_SECRET", ""),
             FEISHU_WEBHOOK_URL=os.getenv("FEISHU_WEBHOOK_URL", ""),
-            FEISHU_BITABLE_APP_TOKEN=os.getenv("FEISHU_BITABLE_APP_TOKEN", ""),
-            FEISHU_TABLE_ID=os.getenv("FEISHU_TABLE_ID", ""),
-            FEISHU_TABLE_NAME=os.getenv("FEISHU_TABLE_NAME", "Abaqus作业日志"),
-            FEISHU_USER_ACCESS_TOKEN=os.getenv("FEISHU_USER_ACCESS_TOKEN", ""),
             WATCH_DIRS=None,  # 在 __post_init__ 中处理
         )
 

@@ -1,15 +1,14 @@
 """
 Abaqus 作业监控主程序
-监控 Abaqus 计算作业，通过飞书推送通知并记录日志到多维表格
+监控 Abaqus 计算作业，通过飞书推送通知
 """
 import sys
 import time
 from datetime import datetime
-from typing import Dict, Optional
+from typing import Dict
 
 from src.config.settings import get_settings
 from src.core.job_detector import JobDetector
-from src.feishu.bitable_client import get_bitable_client
 from src.feishu.webhook_client import get_webhook_client
 from src.models.job import JobInfo
 
@@ -22,7 +21,6 @@ class AbaqusMonitor:
         self.settings = get_settings()
         self.detector = JobDetector()
         self.webhook = get_webhook_client()
-        self.bitable = get_bitable_client()
 
         # 跟踪已处理的作业
         self.tracked_jobs: Dict[str, JobInfo] = {}
@@ -35,17 +33,6 @@ class AbaqusMonitor:
         self._log(f"监控目录: {self.settings.WATCH_DIRS}")
         self._log(f"轮询间隔: {self.settings.POLL_INTERVAL} 秒")
         self._log(f"进度推送间隔: {self.settings.PROGRESS_NOTIFY_INTERVAL} 秒")
-
-        # 初始化多维表格
-        if self.settings.ENABLE_FEISHU_BITABLE:
-            try:
-                table_id = self.bitable.ensure_table_exists()
-                if table_id:
-                    self._log(f"多维表格已就绪: {table_id}")
-                else:
-                    self._log("警告: 多维表格初始化失败")
-            except Exception as e:
-                self._log(f"警告: 多维表格初始化异常: {e}")
 
         try:
             while True:
@@ -95,15 +82,6 @@ class AbaqusMonitor:
         if self.settings.FEISHU_WEBHOOK_URL:
             self.webhook.send_job_start(job)
 
-        # 创建多维表格记录
-        if self.settings.ENABLE_FEISHU_BITABLE:
-            try:
-                record_id = self.bitable.create_job_record(job)
-                if record_id:
-                    job.record_id = record_id
-            except Exception as e:
-                self._log(f"创建多维表格记录失败: {e}")
-
     def _on_job_complete(self, job: JobInfo):
         """处理作业完成事件"""
         self._log(f"作业完成: {job.name} - {job.status.value}")
@@ -115,13 +93,6 @@ class AbaqusMonitor:
         # 发送 Webhook 通知
         if self.settings.FEISHU_WEBHOOK_URL:
             self.webhook.send_job_complete(job)
-
-        # 更新多维表格记录
-        if self.settings.ENABLE_FEISHU_BITABLE and job.record_id:
-            try:
-                self.bitable.update_job_record(job.record_id, job)
-            except Exception as e:
-                self._log(f"更新多维表格记录失败: {e}")
 
     def _update_tracked_job(self, tracked: JobInfo, current: JobInfo):
         """更新已跟踪作业的状态"""
