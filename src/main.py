@@ -124,6 +124,7 @@ class AbaqusMonitor:
         tracked.step_time = current.step_time
         tracked.inc_time = current.inc_time
         tracked.status = current.status
+        tracked.odb_size_mb = current.odb_size_mb
 
     def _check_progress_notify(self, job: JobInfo):
         """检查是否需要发送进度通知"""
