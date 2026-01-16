@@ -18,7 +18,7 @@ class JobCSVLogger:
     # CSV 列定义
     COLUMNS = [
         "作业名称", "工作目录", "计算机", "开始时间", "结束时间",
-        "耗时", "状态", "计算结果", "ODB大小(MB)", "Total Time"
+        "耗时", "进度", "状态", "计算结果", "ODB大小(MB)", "Total Time"
     ]
 
     def __init__(self, csv_path: str = "", filename: str = "abaqus_jobs.csv"):
@@ -83,6 +83,7 @@ class JobCSVLogger:
                 "开始时间": job.start_time.strftime('%Y-%m-%d %H:%M:%S'),
                 "结束时间": "",
                 "耗时": "",
+                "进度": "0%",
                 "状态": "运行中",
                 "计算结果": "",
                 "ODB大小(MB)": "",
@@ -135,9 +136,18 @@ class JobCSVLogger:
 
             # 更新目标行
             status = job.status.value
+            # 计算进度百分比
+            progress = ""
+            if job.total_step_time > 0:
+                percent = min(job.total_time / job.total_step_time * 100, 100)
+                progress = f"{percent:.1f}%"
+            elif job.is_completed:
+                progress = "100%"
+
             rows[target_row_idx].update({
                 "结束时间": job.end_time.strftime('%Y-%m-%d %H:%M:%S') if job.end_time else "",
                 "耗时": job.duration or "",
+                "进度": progress,
                 "状态": status,
                 "计算结果": job.result,
                 "ODB大小(MB)": f"{job.odb_size_mb:.2f}" if job.odb_size_mb else "",
