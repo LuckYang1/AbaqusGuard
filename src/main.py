@@ -5,10 +5,11 @@ Abaqus 作业监控主程序
 import sys
 import time
 from datetime import datetime
-from typing import Dict
+from typing import Dict, Optional
 
 from src.config.settings import get_settings
 from src.core.job_detector import JobDetector
+from src.core.csv_logger import JobCSVLogger, init_csv_logger
 from src.feishu.webhook_client import get_webhook_client
 from src.models.job import JobInfo
 
@@ -21,6 +22,14 @@ class AbaqusMonitor:
         self.settings = get_settings()
         self.detector = JobDetector()
         self.webhook = get_webhook_client()
+        self.csv_logger: Optional[JobCSVLogger] = None
+
+        # 初始化 CSV 记录器
+        if self.settings.ENABLE_CSV_LOG:
+            self.csv_logger = init_csv_logger(
+                self.settings.CSV_PATH,
+                self.settings.CSV_FILENAME
+            )
 
         # 跟踪已处理的作业
         self.tracked_jobs: Dict[str, JobInfo] = {}
@@ -82,6 +91,10 @@ class AbaqusMonitor:
         if self.settings.FEISHU_WEBHOOK_URL:
             self.webhook.send_job_start(job)
 
+        # 添加 CSV 记录
+        if self.csv_logger:
+            self.csv_logger.add_job(job)
+
     def _on_job_complete(self, job: JobInfo):
         """处理作业完成事件"""
         self._log(f"作业完成: {job.name} - {job.status.value}")
@@ -93,6 +106,10 @@ class AbaqusMonitor:
         # 发送 Webhook 通知
         if self.settings.FEISHU_WEBHOOK_URL:
             self.webhook.send_job_complete(job)
+
+        # 更新 CSV 记录
+        if self.csv_logger:
+            self.csv_logger.update_job(job)
 
     def _update_tracked_job(self, tracked: JobInfo, current: JobInfo):
         """更新已跟踪作业的状态"""

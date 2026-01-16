@@ -19,6 +19,11 @@ class Settings:
     # 飞书 Webhook 配置
     FEISHU_WEBHOOK_URL: str = ""
 
+    # CSV 记录配置
+    ENABLE_CSV_LOG: bool = True
+    CSV_PATH: str = ""  # CSV 文件保存目录，留空使用项目根目录
+    CSV_FILENAME: str = "abaqus_jobs_%Y%m.csv"  # 支持日期格式化和 {folder} 占位符
+
     # Abaqus 监控配置
     WATCH_DIRS: List[str] = None
     POLL_INTERVAL: int = 5
@@ -38,6 +43,13 @@ class Settings:
         self.ENABLE_PROCESS_DETECTION = self._parse_bool(
             os.getenv("ENABLE_PROCESS_DETECTION", "true"), self.ENABLE_PROCESS_DETECTION
         )
+        self.ENABLE_CSV_LOG = self._parse_bool(
+            os.getenv("ENABLE_CSV_LOG", "true"), self.ENABLE_CSV_LOG
+        )
+
+        # 转换字符串
+        self.CSV_PATH = os.getenv("CSV_PATH", self.CSV_PATH)
+        self.CSV_FILENAME = os.getenv("CSV_FILENAME", self.CSV_FILENAME)
 
         # 转换整数
         self.POLL_INTERVAL = int(os.getenv("POLL_INTERVAL", str(self.POLL_INTERVAL)))

@@ -184,6 +184,7 @@ Step: {job.step} | Increment: {job.increment} | Step Time: {job.step_time:.3f} |
         """发送作业完成通知"""
         is_success = job.status.value == "成功"
         content = f"""作业名称: {job.name}
+工作目录: {job.work_dir}
 计算结果: {job.result or job.status.value}
 计算耗时: {job.duration or '未知'}
 Total Time: {job.total_time:.2f}

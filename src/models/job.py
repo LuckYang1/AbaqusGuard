@@ -42,9 +42,11 @@ class JobInfo:
     @property
     def duration(self) -> Optional[str]:
         """计算耗时，返回格式化字符串"""
-        if not self.end_time:
+        if not self.start_time:
             return None
-        delta = self.end_time - self.start_time
+        # 如果已结束使用结束时间，否则使用当前时间
+        end = self.end_time if self.end_time else datetime.now()
+        delta = end - self.start_time
         total_seconds = int(delta.total_seconds())
         hours, remainder = divmod(total_seconds, 3600)
         minutes, seconds = divmod(remainder, 60)
