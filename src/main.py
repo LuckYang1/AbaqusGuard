@@ -150,9 +150,6 @@ def main():
         print("错误: 未配置监控目录 (WATCH_DIRS)")
         sys.exit(1)
 
-    if not settings.FEISHU_APP_ID or not settings.FEISHU_APP_SECRET:
-        print("警告: 未配置飞书应用凭证，部分功能可能不可用")
-
     # 启动监控
     monitor = AbaqusMonitor()
     monitor.run()

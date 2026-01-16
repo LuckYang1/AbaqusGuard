@@ -16,10 +16,6 @@ load_dotenv()
 class Settings:
     """应用配置"""
 
-    # 飞书应用配置
-    FEISHU_APP_ID: str
-    FEISHU_APP_SECRET: str
-
     # 飞书 Webhook 配置
     FEISHU_WEBHOOK_URL: str = ""
 
@@ -61,8 +57,6 @@ class Settings:
     def load(cls) -> "Settings":
         """从环境变量加载配置"""
         return cls(
-            FEISHU_APP_ID=os.getenv("FEISHU_APP_ID", ""),
-            FEISHU_APP_SECRET=os.getenv("FEISHU_APP_SECRET", ""),
             FEISHU_WEBHOOK_URL=os.getenv("FEISHU_WEBHOOK_URL", ""),
             WATCH_DIRS=None,  # 在 __post_init__ 中处理
         )
