@@ -23,6 +23,7 @@ class Settings:
     ENABLE_CSV_LOG: bool = True
     CSV_PATH: str = ""  # CSV 文件保存目录，留空使用项目根目录
     CSV_FILENAME: str = "abaqus_jobs_%Y%m.csv"  # 支持日期格式化和 {folder} 占位符
+    CSV_UPDATE_INTERVAL: int = 60  # CSV 更新间隔（秒），设为 0 禁用定时更新
 
     # Abaqus 监控配置
     WATCH_DIRS: List[str] = None
@@ -56,6 +57,7 @@ class Settings:
         self.PROGRESS_NOTIFY_INTERVAL = int(
             os.getenv("PROGRESS_NOTIFY_INTERVAL", str(self.PROGRESS_NOTIFY_INTERVAL))
         )
+        self.CSV_UPDATE_INTERVAL = int(os.getenv("CSV_UPDATE_INTERVAL", str(self.CSV_UPDATE_INTERVAL)))
         self.LCK_GRACE_PERIOD = int(os.getenv("LCK_GRACE_PERIOD", str(self.LCK_GRACE_PERIOD)))
 
     @staticmethod
