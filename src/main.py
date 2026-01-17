@@ -58,8 +58,11 @@ class AbaqusMonitor:
     def _scan_once(self):
         """执行一次扫描"""
         try:
-            # 扫描所有目录
+            # 扫描所有目录（内部会刷新目录列表）
             all_jobs = self.detector.scan_directories()
+
+            # 处理目录变化
+            self._handle_dir_changes()
 
             # 处理新作业
             for job in all_jobs:
@@ -89,6 +92,36 @@ class AbaqusMonitor:
 
         except Exception as e:
             self._log(f"扫描异常: {e}")
+
+    def _handle_dir_changes(self):
+        """处理监控目录变化"""
+        added = self.detector._last_added_dirs
+        removed = self.detector._last_removed_dirs
+
+        # 日志输出新增目录
+        for dir_path in added:
+            self._log(f"新增监控目录: {dir_path}")
+
+        # 处理移除目录
+        for dir_path in removed:
+            self._log(f"移除监控目录: {dir_path}")
+            self._cleanup_removed_dir(str(dir_path))
+
+    def _cleanup_removed_dir(self, work_dir: str):
+        """清理已移除目录的作业跟踪状态"""
+        keys_to_remove = []
+        for job_key, job in self.tracked_jobs.items():
+            if job.work_dir == work_dir:
+                keys_to_remove.append(job_key)
+                self._log(
+                    f"停止监控作业: {job.name} @ {job.work_dir} "
+                    f"(已运行 {job.duration or '未知'})"
+                )
+
+        for job_key in keys_to_remove:
+            self.tracked_jobs.pop(job_key, None)
+            self.last_progress_notify.pop(job_key, None)
+            self.last_csv_update.pop(job_key, None)
 
     def _on_job_start(self, job: JobInfo):
         """处理作业开始事件"""

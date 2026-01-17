@@ -4,11 +4,12 @@
 参考 abaqus-monitoring 项目使用集合运算处理作业状态
 """
 
+import os
 import socket
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional, Set, Tuple
 
 from src.config.settings import get_settings
 from src.core.inp_parser import parse_total_step_time
@@ -33,6 +34,46 @@ class JobDetector:
         self.completed_jobs: List[JobInfo] = []
         # {目录: 已知的孤立 .lck 文件集合}
         self.ignored_lck: Dict[Path, Set[str]] = {}
+        # 上次目录变化信息
+        self._last_added_dirs: Set[Path] = set()
+        self._last_removed_dirs: Set[Path] = set()
+
+    def _refresh_watch_dirs(self) -> Tuple[Set[Path], Set[Path]]:
+        """
+        刷新监控目录列表，返回新增和移除的目录
+
+        Returns:
+            (新增目录集合, 移除目录集合)
+        """
+        # 重新读取环境变量
+        watch_dirs_str = os.getenv("WATCH_DIRS", "")
+        new_dirs = set(Path(d.strip()) for d in watch_dirs_str.split(",") if d.strip())
+
+        # 当前已有的目录
+        old_dirs = set(self.running_jobs.keys())
+
+        # 计算差异
+        added = new_dirs - old_dirs
+        removed = old_dirs - new_dirs
+
+        # 处理新增目录（初始化数据结构）
+        for dir_path in added:
+            self.running_jobs[dir_path] = {}
+            self.ignored_lck[dir_path] = set()
+
+        # 处理移除目录（清理数据结构）
+        for dir_path in removed:
+            self.running_jobs.pop(dir_path, None)
+            self.ignored_lck.pop(dir_path, None)
+
+        # 更新 settings
+        self.settings.WATCH_DIRS = [str(d) for d in new_dirs]
+
+        # 保存变化信息
+        self._last_added_dirs = added
+        self._last_removed_dirs = removed
+
+        return added, removed
 
     def scan_directories(self) -> List[JobInfo]:
         """
@@ -43,9 +84,12 @@ class JobDetector:
         """
         all_jobs = []
 
+        # 刷新监控目录列表（支持热更新）
+        self._refresh_watch_dirs()
+
         for watch_dir in self.settings.WATCH_DIRS:
             watch_path = Path(watch_dir)
-            # 初始化该目录的数据结构
+            # 初始化该目录的数据结构（新增目录已在 _refresh_watch_dirs 中处理）
             if watch_path not in self.running_jobs:
                 self.running_jobs[watch_path] = {}
             if watch_path not in self.ignored_lck:
