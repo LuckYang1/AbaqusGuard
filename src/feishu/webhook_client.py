@@ -19,7 +19,7 @@ class WebhookClient:
         self.settings = get_settings()
         self.webhook_url = self.settings.FEISHU_WEBHOOK_URL
 
-    def send(self, title: str, content: str, is_success: bool = True, job: JobInfo = None) -> bool:
+    def send(self, title: str, content: str, is_success: bool = True, job: JobInfo | None = None) -> bool:
         """
         发送飞书集成流程 Webhook 消息
 
@@ -38,20 +38,24 @@ class WebhookClient:
             return False
 
         # 状态标识
-        status = "成功" if is_success else "失败"
+        if job:
+            status_text = job.status.value
+        else:
+            status_text = "成功" if is_success else "失败"
+            
         status_icon = "[完成]" if is_success else "[失败]"
 
         # 构建飞书集成流程 Webhook 的消息格式
         # message_type 必须为 "text"，其他为自定义键值对
         # 使用粗体和 Emoji 让消息更易读
         title_with_emoji = f"🚀 {title}" if is_success else f"❌ {title}"
-        full_message = f"**{title_with_emoji}**\n\n{content}\n\n🖥️ 计算机: {socket.gethostname()}\n⏰ 时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        full_message = f"**{title_with_emoji}**\n✅ 状态: {status_text}\n\n{content}\n\n🖥️ 计算机: {socket.gethostname()}\n⏰ 时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
 
         payload = {
             "message_type": "text",
             "title": title,
             "content": content,
-            "status": status,
+            "status": status_text,
             "status_icon": status_icon,
             "is_success": is_success,
             "computer": socket.gethostname(),
@@ -228,7 +232,7 @@ Total Time: {job.total_time:.2f}
 
 
 # 全局客户端实例
-_client: WebhookClient = None
+_client: WebhookClient | None = None
 
 
 def get_webhook_client() -> WebhookClient:
