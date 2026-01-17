@@ -1,7 +1,7 @@
 [project]
-name = "fs-abaqus"
+name = "abaqus-guard"
 version = "0.1.0"
-description = "Abaqus 作业监控脚本 - 监控作业状态并推送到飞书"
+description = "Abaqus 作业监控守卫 - 监控作业状态，支持飞书/企业微信通知和 CSV 记录"
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [

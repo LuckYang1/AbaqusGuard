@@ -1,8 +1,8 @@
-# FS-ABAQUS 项目实现计划
+# AbaqusGuard 项目实现计划
 
 ## 一、项目概述
 
-**项目名称**: FS-ABAQUS - Abaqus 作业监控脚本
+**项目名称**: AbaqusGuard - Abaqus 作业监控守卫
 **目标**: 监控 Abaqus 仿真计算作业，通过飞书机器人推送通知，并记录日志到飞书多维表格
 
 ---
@@ -10,7 +10,7 @@
 ## 二、技术架构
 
 ```
-FS-ABAQUS/
+AbaqusGuard/
 ├── src/
 │   ├── __init__.py
 │   ├── config/

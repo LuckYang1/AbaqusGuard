@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-FS-ABAQUS is an Abaqus job monitoring script that monitors simulation job status and sends notifications to Feishu (Lark). It tracks jobs by monitoring `.lck` files and parses `.sta` files for progress.
+AbaqusGuard is an Abaqus job monitoring tool that monitors simulation job status and sends notifications to Feishu (Lark) and WeCom. It tracks jobs by monitoring `.lck` files and parses `.sta` files for progress.
 
 ## Commands
 

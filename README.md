@@ -1,4 +1,4 @@
-# 🚀 FS-ABAQUS
+# 🛡️ AbaqusGuard
 
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.8+-blue.svg" alt="Python">
@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  <b>Abaqus 作业监控工具</b> - 监控作业状态，支持飞书/企业微信通知和 CSV 记录
+  <b>Abaqus 作业监控守卫</b> - 监控作业状态，支持飞书/企业微信通知和 CSV 记录
 </p>
 
 ---
@@ -37,7 +37,7 @@
 ```bash
 # 克隆项目
 git clone <repository_url>
-cd FS-ABAQUS
+cd AbaqusGuard
 
 # 安装依赖
 uv sync
@@ -132,7 +132,7 @@ WATCH_DIRS=C:/Abaqus_Jobs
 ## 📁 项目结构
 
 ```
-FS-ABAQUS/
+AbaqusGuard/
 ├── 📄 run.py                  # 运行入口
 ├── 📄 main.py                 # 备用入口
 ├── 📄 pyproject.toml          # 项目配置
