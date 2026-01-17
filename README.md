@@ -36,7 +36,7 @@
 
 ```bash
 # 克隆项目
-git clone <repository_url>
+git clone https://github.com/LuckYang1/AbaqusGuard.git
 cd AbaqusGuard
 
 # 安装依赖

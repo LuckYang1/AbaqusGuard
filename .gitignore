@@ -35,3 +35,8 @@ tests/*.sta
 飞书多维表格api指南
 test_inp_parser.py
 
+# 项目文档（不推送到远端）
+CLAUDE.md
+PLAN.md
+AGENTS.md
+
