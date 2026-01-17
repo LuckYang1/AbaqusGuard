@@ -3,6 +3,7 @@
 通过监控 .lck 文件检测 Abaqus 作业的开始和结束
 参考 abaqus-monitoring 项目使用集合运算处理作业状态
 """
+
 import socket
 import time
 from datetime import datetime
@@ -14,6 +15,7 @@ from src.core.inp_parser import parse_total_step_time
 from src.core.progress_parser import StaParser, get_job_info
 from src.core.process_detector import get_process_detector
 from src.feishu.webhook_client import get_webhook_client
+from src.wecom.webhook_client import get_wecom_client
 from src.models.job import JobInfo, JobStatus
 
 
@@ -25,6 +27,7 @@ class JobDetector:
         self.settings = get_settings()
         self.process_detector = get_process_detector()
         self.webhook = get_webhook_client()
+        self.wecom = get_wecom_client()
         # {目录: {作业名: JobInfo}}
         self.running_jobs: Dict[Path, Dict[str, JobInfo]] = {}
         self.completed_jobs: List[JobInfo] = []
@@ -112,7 +115,11 @@ class JobDetector:
 
         # 9. 检查活跃作业是否变成孤立（进程停止但 .lck 未删除）
         active_jobs_after_orphan_check = set()
-        if self.settings.ENABLE_PROCESS_DETECTION and active_jobs_now and not abaqus_running:
+        if (
+            self.settings.ENABLE_PROCESS_DETECTION
+            and active_jobs_now
+            and not abaqus_running
+        ):
             for job_name in list(active_jobs_now):
                 lck_age = self._get_lck_age(directory, job_name)
                 if lck_age < self.settings.LCK_GRACE_PERIOD:
@@ -146,7 +153,7 @@ class JobDetector:
         lck_files = set()
         try:
             for item in directory.iterdir():
-                if item.suffix.lower() == '.lck' and item.is_file():
+                if item.suffix.lower() == ".lck" and item.is_file():
                     lck_files.add(item.stem)
         except PermissionError:
             print(f"无权限访问目录: {directory}")
@@ -154,7 +161,9 @@ class JobDetector:
             print(f"扫描目录出错 {directory}: {e}")
         return lck_files
 
-    def _handle_new_job(self, directory: Path, job_name: str, abaqus_running: bool) -> Optional[JobInfo]:
+    def _handle_new_job(
+        self, directory: Path, job_name: str, abaqus_running: bool
+    ) -> Optional[JobInfo]:
         """
         处理新作业
 
@@ -174,7 +183,9 @@ class JobDetector:
             if lck_age >= self.settings.LCK_GRACE_PERIOD:
                 # 超过宽限期，判定为孤立文件
                 if self.settings.VERBOSE:
-                    print(f"检测到孤立 .lck 文件 (已存在 {int(lck_age)} 秒): {job_name}")
+                    print(
+                        f"检测到孤立 .lck 文件 (已存在 {int(lck_age)} 秒): {job_name}"
+                    )
                 self.ignored_lck[directory].add(job_name)
                 return None
             else:
@@ -275,6 +286,8 @@ class JobDetector:
         # 发送孤立作业警告通知
         if self.webhook:
             self.webhook.send_orphan_job_warning(job, job_info, duration_str)
+        if self.wecom:
+            self.wecom.send_orphan_job_warning(job, job_info, duration_str)
 
         # 添加到已完成列表
         self.completed_jobs.append(job)
@@ -292,6 +305,9 @@ class JobDetector:
         except Exception as e:
             if self.settings.VERBOSE:
                 print(f"更新作业进度失败 {job.name}: {e}")
+
+        # 更新 ODB 文件大小
+        self._update_odb_size(job, directory)
 
     def _get_lck_age(self, directory: Path, job_name: str) -> float:
         """

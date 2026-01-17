@@ -2,6 +2,7 @@
 Abaqus 作业监控主程序
 监控 Abaqus 计算作业，通过飞书推送通知
 """
+
 import sys
 import time
 from datetime import datetime
@@ -11,6 +12,7 @@ from src.config.settings import get_settings
 from src.core.job_detector import JobDetector
 from src.core.csv_logger import JobCSVLogger, init_csv_logger
 from src.feishu.webhook_client import get_webhook_client
+from src.wecom.webhook_client import get_wecom_client
 from src.models.job import JobInfo
 
 
@@ -22,13 +24,13 @@ class AbaqusMonitor:
         self.settings = get_settings()
         self.detector = JobDetector()
         self.webhook = get_webhook_client()
+        self.wecom = get_wecom_client()
         self.csv_logger: Optional[JobCSVLogger] = None
 
         # 初始化 CSV 记录器
         if self.settings.ENABLE_CSV_LOG:
             self.csv_logger = init_csv_logger(
-                self.settings.CSV_PATH,
-                self.settings.CSV_FILENAME
+                self.settings.CSV_PATH, self.settings.CSV_FILENAME
             )
 
         # 跟踪已处理的作业
@@ -92,9 +94,13 @@ class AbaqusMonitor:
         """处理作业开始事件"""
         self._log(f"作业开始: {job.name} @ {job.work_dir}")
 
-        # 发送 Webhook 通知
+        # 发送飞书通知
         if self.settings.FEISHU_WEBHOOK_URL:
             self.webhook.send_job_start(job)
+
+        # 发送企业微信通知
+        if self.settings.WECOM_WEBHOOK_URL:
+            self.wecom.send_job_start(job)
 
         # 添加 CSV 记录
         if self.csv_logger:
@@ -112,9 +118,13 @@ class AbaqusMonitor:
         if job.is_orphan:
             return
 
-        # 发送 Webhook 通知
+        # 发送飞书通知
         if self.settings.FEISHU_WEBHOOK_URL:
             self.webhook.send_job_complete(job)
+
+        # 发送企业微信通知
+        if self.settings.WECOM_WEBHOOK_URL:
+            self.wecom.send_job_complete(job)
 
     def _update_tracked_job(self, tracked: JobInfo, current: JobInfo):
         """更新已跟踪作业的状态"""
@@ -142,6 +152,8 @@ class AbaqusMonitor:
 
             if self.settings.FEISHU_WEBHOOK_URL:
                 self.webhook.send_job_progress(job)
+            if self.settings.WECOM_WEBHOOK_URL:
+                self.wecom.send_job_progress(job)
             return
 
         elapsed = (now - last_notify).total_seconds()
@@ -151,6 +163,8 @@ class AbaqusMonitor:
 
             if self.settings.FEISHU_WEBHOOK_URL:
                 self.webhook.send_job_progress(job)
+            if self.settings.WECOM_WEBHOOK_URL:
+                self.wecom.send_job_progress(job)
 
             self.last_progress_notify[job_key] = now
 
