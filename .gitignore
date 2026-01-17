@@ -21,7 +21,17 @@ wheels/
 # OS
 .DS_Store
 Thumbs.db
+
+# 本地数据文件
+*.csv
+
+# Claude 本地配置
+.claude/
+
+# 测试数据文件
+tests/*.sta
+
+# 其他忽略
 飞书多维表格api指南
-tests/GGP-SJ-Rigid-zuobiao-R-disp-half-ex.sta
-.csv
+test_inp_parser.py
 
