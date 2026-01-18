@@ -20,7 +20,7 @@ class WecomWebhookClient:
         self.settings = get_settings()
         self.webhook_url = self.settings.WECOM_WEBHOOK_URL
 
-    def _send_markdown(self, content: str) -> bool:
+    def _send_markdown(self, content: str, webhook_url: str | None = None) -> bool:
         """
         发送企业微信 Markdown 消息
 
@@ -30,7 +30,8 @@ class WecomWebhookClient:
         Returns:
             是否发送成功
         """
-        if not self.webhook_url:
+        target_url = webhook_url or self.settings.WECOM_WEBHOOK_URL or self.webhook_url
+        if not target_url:
             if self.settings.VERBOSE:
                 print("未配置企业微信 Webhook URL，跳过通知")
             return False
@@ -39,7 +40,7 @@ class WecomWebhookClient:
 
         try:
             response = requests.post(
-                self.webhook_url,
+                target_url,
                 headers={"Content-Type": "application/json"},
                 data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
                 timeout=10,
@@ -69,6 +70,7 @@ class WecomWebhookClient:
         is_success: bool = True,
         job: JobInfo | None = None,
         idempotency_key: str = "",
+        webhook_url: str | None = None,
     ) -> bool:
         """
         发送企业微信通知（Markdown 格式）
@@ -83,7 +85,10 @@ class WecomWebhookClient:
             是否发送成功
         """
         deduper = get_notification_deduper(self.settings.NOTIFY_DEDUPE_TTL)
-        if idempotency_key and not deduper.should_send(idempotency_key):
+        dedupe_key = idempotency_key
+        if idempotency_key and webhook_url:
+            dedupe_key = f"{idempotency_key}@{webhook_url}"
+        if dedupe_key and not deduper.should_send(dedupe_key):
             if self.settings.VERBOSE:
                 print(f"跳过重复通知: {title}")
             return False
@@ -111,9 +116,9 @@ class WecomWebhookClient:
         if self.settings.VERBOSE:
             print(f"发送企业微信: {title}")
 
-        return self._send_markdown(markdown_content)
+        return self._send_markdown(markdown_content, webhook_url=webhook_url)
 
-    def send_job_start(self, job: JobInfo) -> bool:
+    def send_job_start(self, job: JobInfo, webhook_url: str | None = None) -> bool:
         """发送作业开始通知"""
         content = f"""作业名称: {job.name}
 工作目录: {job.work_dir}
@@ -128,6 +133,7 @@ class WecomWebhookClient:
             is_success=True,
             job=job,
             idempotency_key=key,
+            webhook_url=webhook_url,
         )
 
     def _get_sta_last_lines(self, job: JobInfo, count: int = 3) -> str:
@@ -176,7 +182,7 @@ class WecomWebhookClient:
         bar = "▓" * filled + "░" * (length - filled)
         return f"{bar} {percent * 100:.1f}% ({current:.2f} / {total:.2f})"
 
-    def send_job_progress(self, job: JobInfo) -> bool:
+    def send_job_progress(self, job: JobInfo, webhook_url: str | None = None) -> bool:
         """发送进度更新通知"""
         duration = job.duration or "计算中"
 
@@ -201,9 +207,10 @@ Step: {job.step} | Increment: {job.increment} | Step Time: {job.step_time:.3f} |
             is_success=True,
             job=job,
             idempotency_key=key,
+            webhook_url=webhook_url,
         )
 
-    def send_job_complete(self, job: JobInfo) -> bool:
+    def send_job_complete(self, job: JobInfo, webhook_url: str | None = None) -> bool:
         """发送作业完成通知"""
         is_success = job.status.value == "成功"
         content = f"""作业名称: {job.name}
@@ -219,9 +226,12 @@ ODB大小: {job.odb_size_mb} MB"""
             is_success=is_success,
             job=job,
             idempotency_key=key,
+            webhook_url=webhook_url,
         )
 
-    def send_job_error(self, job: JobInfo, error: str) -> bool:
+    def send_job_error(
+        self, job: JobInfo, error: str, webhook_url: str | None = None
+    ) -> bool:
         """发送异常通知"""
         content = f"""作业名称: {job.name}
 工作目录: {job.work_dir}
@@ -233,10 +243,15 @@ ODB大小: {job.odb_size_mb} MB"""
             is_success=False,
             job=job,
             idempotency_key=key,
+            webhook_url=webhook_url,
         )
 
     def send_orphan_job_warning(
-        self, job: JobInfo, job_info: str, duration_str: str
+        self,
+        job: JobInfo,
+        job_info: str,
+        duration_str: str,
+        webhook_url: str | None = None,
     ) -> bool:
         """
         发送孤立作业警告通知
@@ -270,6 +285,7 @@ Total Time: {job.total_time:.2f}
             is_success=False,
             job=job,
             idempotency_key=key,
+            webhook_url=webhook_url,
         )
 
 

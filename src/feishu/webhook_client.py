@@ -28,6 +28,7 @@ class WebhookClient:
         is_success: bool = True,
         job: JobInfo | None = None,
         idempotency_key: str = "",
+        webhook_url: str | None = None,
     ) -> bool:
         """
         发送飞书集成流程 Webhook 消息
@@ -41,13 +42,18 @@ class WebhookClient:
         Returns:
             是否发送成功
         """
-        if not self.webhook_url:
+        target_url = webhook_url or self.settings.FEISHU_WEBHOOK_URL or self.webhook_url
+
+        if not target_url:
             if self.settings.VERBOSE:
                 print("未配置 Webhook URL,跳过通知")
             return False
 
         deduper = get_notification_deduper(self.settings.NOTIFY_DEDUPE_TTL)
-        if idempotency_key and not deduper.should_send(idempotency_key):
+        dedupe_key = idempotency_key
+        if idempotency_key and webhook_url:
+            dedupe_key = f"{idempotency_key}@{webhook_url}"
+        if dedupe_key and not deduper.should_send(dedupe_key):
             if self.settings.VERBOSE:
                 print(f"跳过重复通知: {title}")
             return False
@@ -105,7 +111,7 @@ class WebhookClient:
 
         try:
             response = requests.post(
-                self.webhook_url,
+                target_url,
                 headers={"Content-Type": "application/json"},
                 json=payload,
                 timeout=10,
@@ -128,7 +134,7 @@ class WebhookClient:
             print(f"Webhook 通知发送失败: {e}")
             return False
 
-    def send_job_start(self, job: JobInfo) -> bool:
+    def send_job_start(self, job: JobInfo, webhook_url: str | None = None) -> bool:
         """发送作业开始通知"""
         content = f"""作业名称: {job.name}
 工作目录: {job.work_dir}
@@ -138,7 +144,12 @@ class WebhookClient:
 正在计算中，请等待完成通知..."""
         key = f"feishu:job:{job.name}@{job.work_dir}#{int(job.start_time.timestamp())}:start"
         return self.send(
-            "[Abaqus] 计算开始", content, is_success=True, job=job, idempotency_key=key
+            "[Abaqus] 计算开始",
+            content,
+            is_success=True,
+            job=job,
+            idempotency_key=key,
+            webhook_url=webhook_url,
         )
 
     def _get_sta_last_lines(self, job: JobInfo, count: int = 3) -> str:
@@ -187,8 +198,9 @@ class WebhookClient:
         bar = "▓" * filled + "░" * (length - filled)
         return f"{bar} {percent * 100:.1f}% ({current:.2f} / {total:.2f})"
 
-    def send_job_progress(self, job: JobInfo) -> bool:
+    def send_job_progress(self, job: JobInfo, webhook_url: str | None = None) -> bool:
         """发送进度更新通知"""
+
         duration = job.duration or "计算中"
 
         # 获取 .sta 文件最后几行
@@ -215,10 +227,12 @@ Step: {job.step} | Increment: {job.increment} | Step Time: {job.step_time:.3f} |
             is_success=True,
             job=job,
             idempotency_key=key,
+            webhook_url=webhook_url,
         )
 
-    def send_job_complete(self, job: JobInfo) -> bool:
+    def send_job_complete(self, job: JobInfo, webhook_url: str | None = None) -> bool:
         """发送作业完成通知"""
+
         is_success = job.status.value == "成功"
         content = f"""作业名称: {job.name}
 工作目录: {job.work_dir}
@@ -233,10 +247,14 @@ ODB大小: {job.odb_size_mb} MB"""
             is_success=is_success,
             job=job,
             idempotency_key=key,
+            webhook_url=webhook_url,
         )
 
-    def send_job_error(self, job: JobInfo, error: str) -> bool:
+    def send_job_error(
+        self, job: JobInfo, error: str, webhook_url: str | None = None
+    ) -> bool:
         """发送异常通知"""
+
         content = f"""作业名称: {job.name}
 工作目录: {job.work_dir}
 错误信息: {error}"""
@@ -247,10 +265,15 @@ ODB大小: {job.odb_size_mb} MB"""
             is_success=False,
             job=job,
             idempotency_key=key,
+            webhook_url=webhook_url,
         )
 
     def send_orphan_job_warning(
-        self, job: JobInfo, job_info: str, duration_str: str
+        self,
+        job: JobInfo,
+        job_info: str,
+        duration_str: str,
+        webhook_url: str | None = None,
     ) -> bool:
         """
         发送孤立作业警告通知
@@ -284,6 +307,7 @@ Total Time: {job.total_time:.2f}
             is_success=False,
             job=job,
             idempotency_key=key,
+            webhook_url=webhook_url,
         )
 
 

@@ -133,12 +133,12 @@ class AbaqusMonitor:
         self._log(f"作业开始: {job.name} @ {job.work_dir}")
 
         # 发送飞书通知
-        if self.settings.FEISHU_WEBHOOK_URL:
-            self.webhook.send_job_start(job)
+        for url in self.settings.select_webhook_urls(job, "start", "feishu"):
+            self.webhook.send_job_start(job, webhook_url=url)
 
         # 发送企业微信通知
-        if self.settings.WECOM_WEBHOOK_URL:
-            self.wecom.send_job_start(job)
+        for url in self.settings.select_webhook_urls(job, "start", "wecom"):
+            self.wecom.send_job_start(job, webhook_url=url)
 
         # 添加 CSV 记录
         if self.csv_logger:
@@ -157,12 +157,12 @@ class AbaqusMonitor:
             return
 
         # 发送飞书通知
-        if self.settings.FEISHU_WEBHOOK_URL:
-            self.webhook.send_job_complete(job)
+        for url in self.settings.select_webhook_urls(job, "complete", "feishu"):
+            self.webhook.send_job_complete(job, webhook_url=url)
 
         # 发送企业微信通知
-        if self.settings.WECOM_WEBHOOK_URL:
-            self.wecom.send_job_complete(job)
+        for url in self.settings.select_webhook_urls(job, "complete", "wecom"):
+            self.wecom.send_job_complete(job, webhook_url=url)
 
     def _update_tracked_job(self, tracked: JobInfo, current: JobInfo):
         """更新已跟踪作业的状态"""
@@ -194,10 +194,10 @@ class AbaqusMonitor:
             self.last_progress_snapshot[job_key] = snapshot
             self._log(f"进度更新: {job.name} - Step:{job.step} Inc:{job.increment}")
 
-            if self.settings.FEISHU_WEBHOOK_URL:
-                self.webhook.send_job_progress(job)
-            if self.settings.WECOM_WEBHOOK_URL:
-                self.wecom.send_job_progress(job)
+            for url in self.settings.select_webhook_urls(job, "progress", "feishu"):
+                self.webhook.send_job_progress(job, webhook_url=url)
+            for url in self.settings.select_webhook_urls(job, "progress", "wecom"):
+                self.wecom.send_job_progress(job, webhook_url=url)
             return
 
         elapsed = (now - last_notify).total_seconds()
@@ -214,10 +214,10 @@ class AbaqusMonitor:
 
             self._log(f"进度更新: {job.name} - Step:{job.step} Inc:{job.increment}")
 
-            if self.settings.FEISHU_WEBHOOK_URL:
-                self.webhook.send_job_progress(job)
-            if self.settings.WECOM_WEBHOOK_URL:
-                self.wecom.send_job_progress(job)
+            for url in self.settings.select_webhook_urls(job, "progress", "feishu"):
+                self.webhook.send_job_progress(job, webhook_url=url)
+            for url in self.settings.select_webhook_urls(job, "progress", "wecom"):
+                self.wecom.send_job_progress(job, webhook_url=url)
 
             self.last_progress_notify[job_key] = now
             self.last_progress_snapshot[job_key] = snapshot

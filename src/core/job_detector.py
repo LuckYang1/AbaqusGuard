@@ -4,7 +4,6 @@
 参考 abaqus-monitoring 项目使用集合运算处理作业状态
 """
 
-import os
 import socket
 import time
 from datetime import datetime
@@ -48,9 +47,9 @@ class JobDetector:
         Returns:
             (新增目录集合, 移除目录集合)
         """
-        # 重新读取环境变量
-        watch_dirs_str = os.getenv("WATCH_DIRS", "")
-        new_dirs = set(Path(d.strip()) for d in watch_dirs_str.split(",") if d.strip())
+        # 重新读取配置文件
+        self.settings.reload()
+        new_dirs = set(Path(d) for d in (self.settings.WATCH_DIRS or []))
 
         # 当前已有的目录
         old_dirs = set(self.running_jobs.keys())
@@ -405,10 +404,14 @@ class JobDetector:
             print(f"   运行时长: {duration_str}")
 
         # 发送孤立作业警告通知
-        if self.webhook:
-            self.webhook.send_orphan_job_warning(job, job_info, duration_str)
-        if self.wecom:
-            self.wecom.send_orphan_job_warning(job, job_info, duration_str)
+        for url in self.settings.select_webhook_urls(job, "orphan", "feishu"):
+            self.webhook.send_orphan_job_warning(
+                job, job_info, duration_str, webhook_url=url
+            )
+        for url in self.settings.select_webhook_urls(job, "orphan", "wecom"):
+            self.wecom.send_orphan_job_warning(
+                job, job_info, duration_str, webhook_url=url
+            )
 
         # 添加到已完成列表
         self.completed_jobs.append(job)

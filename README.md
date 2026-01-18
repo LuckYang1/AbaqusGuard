@@ -43,37 +43,63 @@ cd AbaqusGuard
 uv sync
 
 # 复制配置文件
-cp .env.example .env
+cp config.toml.example config.toml
 
 # 编辑配置
-notepad .env
+notepad config.toml
 ```
 
 ---
 
 ## ⚙️ 配置说明
 
-编辑 `.env` 文件进行配置：
+编辑 `config.toml` 文件进行配置：
 
 ### 📬 通知配置（可选）
 
 | 配置项 | 说明 | 示例 |
 |--------|------|------|
-| `FEISHU_WEBHOOK_URL` | 飞书 Webhook URL | `https://www.feishu.cn/flow/api/trigger-webhook/xxx` |
-| `WECOM_WEBHOOK_URL` | 企业微信 Webhook URL | `https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx` |
+| `webhook.feishu_url` | 飞书 Webhook URL | `https://www.feishu.cn/flow/api/trigger-webhook/xxx` |
+| `webhook.wecom_url` | 企业微信 Webhook URL | `https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx` |
+| `webhook.routes` | 多机器人路由（数组表） | `[[webhook.routes]]` |
 
-> 💡 留空则不发送对应渠道的通知，两个渠道可独立配置
+> 💡 留空则不发送对应渠道的通知，两个渠道可独立配置；若设置路由，未匹配规则会回退到默认 URL
+
+#### 多机器人路由（TOML）
+
+```toml
+[webhook]
+feishu_url = "https://www.feishu.cn/flow/api/trigger-webhook/xxx"
+wecom_url = "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=yyy"
+
+[[webhook.routes]]
+channel = "feishu"
+events = ["start", "progress"]
+match_dir = "C:/Abaqus_Jobs"
+webhook_url = "https://www.feishu.cn/flow/api/trigger-webhook/aaa"
+
+[[webhook.routes]]
+channel = "wecom"
+events = ["complete", "orphan"]
+match_dir = "D:/Projects"
+webhook_url = "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=bbb"
+```
+
+- `events` 固定值：`start`、`progress`、`complete`、`error`、`orphan`
+- `match_dir` 为目录前缀匹配，可匹配其子目录
+- `match_job` 可选，使用通配符（如 `ProjectA-*`），不填则匹配全部作业
+- 未匹配任何规则时，回退到 `webhook.feishu_url` / `webhook.wecom_url`
 
 ### 📝 CSV 记录配置
 
 | 配置项 | 默认值 | 说明 |
 |--------|--------|------|
-| `ENABLE_CSV_LOG` | `true` | 是否启用 CSV 记录 |
-| `CSV_PATH` | 空（项目根目录） | CSV 文件保存目录 |
-| `CSV_FILENAME` | `abaqus_jobs_%Y%m.csv` | 文件名模板 |
-| `CSV_UPDATE_INTERVAL` | `60` | 定时更新间隔（秒） |
-| `CSV_OVERWRITE_MODE` | `none` | 覆盖模式 |
-| `CSV_MAX_HISTORY` | `5` | 保留历史记录数 |
+| `csv.enable` | `true` | 是否启用 CSV 记录 |
+| `csv.path` | 空（项目根目录） | CSV 文件保存目录 |
+| `csv.filename` | `abaqus_jobs_%Y%m.csv` | 文件名模板 |
+| `csv.update_interval` | `60` | 定时更新间隔（秒） |
+| `csv.overwrite_mode` | `none` | 覆盖模式 |
+| `csv.max_history` | `5` | 保留历史记录数 |
 
 #### 📋 CSV 覆盖模式说明
 
@@ -87,15 +113,15 @@ notepad .env
 
 | 配置项 | 默认值 | 说明 |
 |--------|--------|------|
-| `WATCH_DIRS` | - | 监控目录列表，多个目录用逗号分隔 |
-| `POLL_INTERVAL` | `5` | 轮询间隔（秒） |
-| `VERBOSE` | `true` | 是否输出详细日志 |
-| `PROGRESS_NOTIFY_INTERVAL` | `3600` | 进度通知间隔（秒） |
-| `ENABLE_PROCESS_DETECTION` | `true` | 是否启用进程检测 |
-| `LCK_GRACE_PERIOD` | `60` | .lck 文件宽限期（秒） |
-| `JOB_END_CONFIRM_PERIOD` | `60` | .lck 删除后的结束确认期（秒），避免 .sta 收尾写入导致误判 |
-| `NOTIFY_DEDUPE_TTL` | `3600` | 通知去重窗口（秒），防止相同事件重复发送 |
-| `PROGRESS_NOTIFY_MIN_TOTAL_TIME_DELTA` | `0` | Total Time 最小增量阈值（>0 时可用于触发进度推送） |
+| `watch_dirs` | - | 监控目录列表 |
+| `poll_interval` | `5` | 轮询间隔（秒） |
+| `verbose` | `true` | 是否输出详细日志 |
+| `progress_notify_interval` | `3600` | 进度通知间隔（秒） |
+| `enable_process_detection` | `true` | 是否启用进程检测 |
+| `lck_grace_period` | `60` | .lck 文件宽限期（秒） |
+| `job_end_confirm_period` | `60` | .lck 删除后的结束确认期（秒），避免 .sta 收尾写入导致误判 |
+| `notify_dedupe_ttl` | `3600` | 通知去重窗口（秒），防止相同事件重复发送 |
+| `progress_notify_min_total_time_delta` | `0` | Total Time 最小增量阈值（>0 时可用于触发进度推送） |
 
 ---
 
@@ -109,14 +135,14 @@ uv run python run.py
 
 ### 动态修改监控目录
 
-编辑 `.env` 文件中的 `WATCH_DIRS`，保存后自动生效（无需重启服务）：
+编辑 `config.toml` 文件中的 `watch_dirs`，保存后自动生效（无需重启服务）：
 
-```env
+```toml
 # 添加新目录
-WATCH_DIRS=C:/Abaqus_Jobs,D:/NewProject
+watch_dirs = ["C:/Abaqus_Jobs", "D:/NewProject"]
 
 # 移除目录
-WATCH_DIRS=C:/Abaqus_Jobs
+watch_dirs = ["C:/Abaqus_Jobs"]
 ```
 
 ### 📺 控制台日志示例
@@ -139,8 +165,7 @@ AbaqusGuard/
 ├── 📄 run.py                  # 运行入口
 ├── 📄 main.py                 # 备用入口
 ├── 📄 pyproject.toml          # 项目配置
-├── 📄 .env                    # 环境配置（需从 .env.example 复制）
-├── 📄 .env.example            # 环境配置示例
+├── 📄 config.toml             # 配置文件
 ├── 📂 src/
 │   ├── 📄 __init__.py
 │   ├── 📄 main.py             # 主程序
@@ -175,7 +200,7 @@ AbaqusGuard/
 <summary><b>🔔 为什么作业开始后没有收到通知？</b></summary>
 
 请检查以下几点：
-1. 确认 `.env` 中配置了正确的 Webhook URL
+1. 确认 `config.toml` 中配置了正确的 Webhook URL
 2. 确认网络可以访问飞书/企业微信服务器
 3. 查看控制台是否有错误日志
 
@@ -184,10 +209,11 @@ AbaqusGuard/
 <details>
 <summary><b>📝 如何只使用 CSV 记录，不发送通知？</b></summary>
 
-将 `FEISHU_WEBHOOK_URL` 和 `WECOM_WEBHOOK_URL` 留空即可：
-```env
-FEISHU_WEBHOOK_URL=
-WECOM_WEBHOOK_URL=
+将 `webhook.feishu_url` 和 `webhook.wecom_url` 留空即可：
+```toml
+[webhook]
+feishu_url = ""
+wecom_url = ""
 ```
 
 </details>
@@ -196,9 +222,10 @@ WECOM_WEBHOOK_URL=
 <summary><b>📊 CSV 文件中出现很多重复记录怎么办？</b></summary>
 
 设置覆盖模式为 `running`，调试时会自动覆盖未完成的记录：
-```env
-CSV_OVERWRITE_MODE=running
-CSV_MAX_HISTORY=5
+```toml
+[csv]
+overwrite_mode = "running"
+max_history = 5
 ```
 
 </details>
@@ -218,7 +245,7 @@ CSV_MAX_HISTORY=5
 <details>
 <summary><b>🔄 如何修改监控目录而不重启服务？</b></summary>
 
-直接编辑 `.env` 文件中的 `WATCH_DIRS` 并保存，程序会在下一个轮询周期（默认 5 秒）自动检测变化并生效。
+直接编辑 `config.toml` 文件中的 `watch_dirs` 并保存，程序会在下一个轮询周期（默认 5 秒）自动检测变化并生效。
 
 </details>
 
