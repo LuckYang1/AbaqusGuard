@@ -103,13 +103,32 @@ class AbaqusMonitor:
         removed = self.detector._last_removed_dirs
 
         # 日志输出新增目录
-        for dir_path in added:
-            self._log(f"新增监控目录: {dir_path}")
+        if added:
+            if len(added) <= 5:
+                for dir_path in added:
+                    self._log(f"新增监控目录: {dir_path}")
+            else:
+                self._log(f"新增 {len(added)} 个监控目录")
+                for i, dir_path in enumerate(sorted(added, key=str)):
+                    if i < 5:
+                        self._log(f"  + {dir_path}")
+                self._log(f"  ... (共 {len(added)} 个)")
 
-        # 处理移除目录
-        for dir_path in removed:
-            self._log(f"移除监控目录: {dir_path}")
-            self._cleanup_removed_dir(str(dir_path))
+        # 日志输出移除目录
+        if removed:
+            if len(removed) <= 5:
+                for dir_path in removed:
+                    self._log(f"移除监控目录: {dir_path}")
+            else:
+                self._log(f"移除 {len(removed)} 个监控目录")
+                for i, dir_path in enumerate(sorted(removed, key=str)):
+                    if i < 5:
+                        self._log(f"  - {dir_path}")
+                self._log(f"  ... (共 {len(removed)} 个)")
+
+            # 执行清理
+            for dir_path in removed:
+                self._cleanup_removed_dir(str(dir_path))
 
     def _cleanup_removed_dir(self, work_dir: str):
         """清理已移除目录的作业跟踪状态"""

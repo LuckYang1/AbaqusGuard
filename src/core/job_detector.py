@@ -49,14 +49,33 @@ class JobDetector:
         """
         # 重新读取配置文件
         self.settings.reload()
-        new_dirs = set(Path(d) for d in (self.settings.WATCH_DIRS or []))
+
+        # 监控根目录及其直接子目录
+        config_dirs = set(Path(d) for d in (self.settings.WATCH_DIRS or []))
+        monitored_dirs = set()
+
+        for root_dir in config_dirs:
+            if not root_dir.exists() or not root_dir.is_dir():
+                continue
+
+            # 添加根目录本身
+            monitored_dirs.add(root_dir)
+
+            # 添加直接子目录（仅一级）
+            try:
+                for sub in root_dir.iterdir():
+                    if sub.is_dir():
+                        monitored_dirs.add(sub)
+            except Exception as e:
+                if self.settings.VERBOSE:
+                    print(f"扫描直接子目录出错 {root_dir}: {e}")
 
         # 当前已有的目录
         old_dirs = set(self.running_jobs.keys())
 
         # 计算差异
-        added = new_dirs - old_dirs
-        removed = old_dirs - new_dirs
+        added = monitored_dirs - old_dirs
+        removed = old_dirs - monitored_dirs
 
         # 处理新增目录（初始化数据结构）
         for dir_path in added:
@@ -69,9 +88,6 @@ class JobDetector:
             self.running_jobs.pop(dir_path, None)
             self.finishing_jobs.pop(dir_path, None)
             self.ignored_lck.pop(dir_path, None)
-
-        # 更新 settings（确保类型一致）
-        self.settings.WATCH_DIRS = [str(d) for d in new_dirs]
 
         # 保存变化信息
         self._last_added_dirs = added
@@ -91,16 +107,10 @@ class JobDetector:
         # 刷新监控目录列表（支持热更新）
         self._refresh_watch_dirs()
 
-        for watch_dir in self.settings.WATCH_DIRS or []:
-            watch_path = Path(watch_dir)
-            # 初始化该目录的数据结构（新增目录已在 _refresh_watch_dirs 中处理）
-            if watch_path not in self.running_jobs:
-                self.running_jobs[watch_path] = {}
-            if watch_path not in self.finishing_jobs:
-                self.finishing_jobs[watch_path] = {}
-            if watch_path not in self.ignored_lck:
-                self.ignored_lck[watch_path] = set()
+        # 遍历所有实际监控的目录（包括根目录和直接子目录）
+        monitored_dirs = list(self.running_jobs.keys())
 
+        for watch_path in monitored_dirs:
             jobs = self._scan_directory(watch_path)
             all_jobs.extend(jobs)
 
