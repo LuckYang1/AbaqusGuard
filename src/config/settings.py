@@ -91,6 +91,13 @@ class Settings:
         0.0  # Total Time 最小增量阈值（<=0 表示不启用）
     )
 
+    # 飞书多维表格配置
+    ENABLE_BITABLE: bool = False  # 是否启用多维表格同步
+    BITABLE_APP_ID: str = ""  # 飞书应用 ID
+    BITABLE_APP_SECRET: str = ""  # 飞书应用 Secret
+    BITABLE_APP_TOKEN: str = ""  # 多维表格 token
+    BITABLE_TABLE_ID: str = ""  # 数据表 ID
+
     def __post_init__(self):
         """初始化后处理，转换类型和设置默认值"""
         if self.WATCH_DIRS is None:
@@ -179,6 +186,7 @@ class Settings:
 
         csv_config = _get_section(data, "csv")
         webhook_config = _get_section(data, "webhook")
+        bitable_config = _get_section(data, "bitable")
         routes = webhook_config.get("routes", [])
 
         return cls(
@@ -202,6 +210,11 @@ class Settings:
             PROGRESS_NOTIFY_MIN_TOTAL_TIME_DELTA=_get_float(
                 data, "progress_notify_min_total_time_delta", 0.0
             ),
+            ENABLE_BITABLE=_get_bool(bitable_config, "enable", False),
+            BITABLE_APP_ID=_get_str(bitable_config, "app_id", ""),
+            BITABLE_APP_SECRET=_get_str(bitable_config, "app_secret", ""),
+            BITABLE_APP_TOKEN=_get_str(bitable_config, "app_token", ""),
+            BITABLE_TABLE_ID=_get_str(bitable_config, "table_id", ""),
         )
 
 

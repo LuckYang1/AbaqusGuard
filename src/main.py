@@ -12,6 +12,7 @@ from src.config.settings import get_settings
 from src.core.job_detector import JobDetector
 from src.core.csv_logger import JobCSVLogger, init_csv_logger
 from src.feishu.webhook_client import get_webhook_client
+from src.feishu.bitable_logger import BitableLogger, init_bitable_logger
 from src.wecom.webhook_client import get_wecom_client
 from src.models.job import JobInfo, JobStatus
 
@@ -26,6 +27,7 @@ class AbaqusMonitor:
         self.webhook = get_webhook_client()
         self.wecom = get_wecom_client()
         self.csv_logger: Optional[JobCSVLogger] = None
+        self.bitable_logger: Optional[BitableLogger] = None
 
         # 初始化 CSV 记录器
         if self.settings.ENABLE_CSV_LOG:
@@ -33,11 +35,30 @@ class AbaqusMonitor:
                 self.settings.CSV_PATH, self.settings.CSV_FILENAME
             )
 
+        # 初始化飞书多维表格记录器
+        if self.settings.ENABLE_BITABLE:
+            if (
+                self.settings.BITABLE_APP_ID
+                and self.settings.BITABLE_APP_SECRET
+                and self.settings.BITABLE_APP_TOKEN
+                and self.settings.BITABLE_TABLE_ID
+            ):
+                self.bitable_logger = init_bitable_logger(
+                    app_id=self.settings.BITABLE_APP_ID,
+                    app_secret=self.settings.BITABLE_APP_SECRET,
+                    app_token=self.settings.BITABLE_APP_TOKEN,
+                    table_id=self.settings.BITABLE_TABLE_ID,
+                    verbose=self.settings.VERBOSE,
+                )
+                self._log("飞书多维表格记录器已启用")
+            else:
+                self._log("警告: 飞书多维表格配置不完整，已禁用")
+
         # 跟踪已处理的作业
         self.tracked_jobs: Dict[str, JobInfo] = {}
         # 上次进度通知时间
         self.last_progress_notify: Dict[str, datetime] = {}
-        # 上次进度快照（用于“无变化不推送”）
+        # 上次进度快照（用于"无变化不推送"）
         self.last_progress_snapshot: Dict[str, tuple[int, int, float]] = {}
         # 上次 CSV 更新时间
         self.last_csv_update: Dict[str, datetime] = {}
@@ -163,6 +184,10 @@ class AbaqusMonitor:
         if self.csv_logger:
             self.csv_logger.add_job(job)
 
+        # 添加多维表格记录
+        if self.bitable_logger:
+            self.bitable_logger.add_job(job)
+
     def _on_job_complete(self, job: JobInfo):
         """处理作业完成事件"""
         self._log(f"作业完成: {job.name} - {job.status.value}")
@@ -170,6 +195,10 @@ class AbaqusMonitor:
         # 更新 CSV 记录（包括孤立作业）
         if self.csv_logger:
             self.csv_logger.update_job(job)
+
+        # 更新多维表格记录
+        if self.bitable_logger:
+            self.bitable_logger.update_job(job)
 
         # 孤立作业已在 detector 中发送警告通知，跳过 Webhook
         if job.is_orphan:

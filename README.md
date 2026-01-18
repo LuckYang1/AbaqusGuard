@@ -17,6 +17,7 @@
 - 🔍 自动检测 Abaqus 作业的开始、进度和完成
 - 📱 支持飞书和企业微信 Webhook 通知
 - 📊 CSV 记录作业历史，支持覆盖模式和历史清理
+- ☁️ **飞书多维表格实时同步** - 作业数据自动同步到飞书多维表格，随时随地查看
 - ⚠️ 检测孤立作业（进程异常终止但 .lck 文件未删除）
 - 🔄 支持动态添加/移除监控目录（无需重启服务）
 - 📈 进度条显示和 .sta 文件解析
@@ -123,6 +124,66 @@ webhook_url = "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=bbb"
 | `notify_dedupe_ttl` | `3600` | 通知去重窗口（秒），防止相同事件重复发送 |
 | `progress_notify_min_total_time_delta` | `0` | Total Time 最小增量阈值（>0 时可用于触发进度推送） |
 
+### ☁️ 飞书多维表格配置（新功能）
+
+| 配置项 | 默认值 | 说明 |
+|--------|--------|------|
+| `bitable.enable` | `false` | 是否启用飞书多维表格同步 |
+| `bitable.app_id` | 空 | 飞书应用 ID |
+| `bitable.app_secret` | 空 | 飞书应用 Secret |
+| `bitable.app_token` | 空 | 多维表格的 App Token |
+| `bitable.table_id` | 空 | 数据表的 Table ID |
+
+#### 📌 多维表格配置步骤
+
+**1. 创建飞书应用**
+
+1. 访问[飞书开放平台](https://open.feishu.cn/app)
+2. 创建企业自建应用，获取 `app_id` 和 `app_secret`
+3. 在应用权限中开通"多维表格"权限，并授予对应多维表格的写入权限
+
+**2. 获取多维表格信息**
+
+在飞书多维表格中创建表格后，从 URL 中获取：
+```
+https://xxx.feishu.cn/base/bascnXXXXXX?table=tblXXXXXX
+                        ↑app_token  ↑table_id
+```
+- `app_token` = `bascnXXXXXX`
+- `table_id` = `tblXXXXXX`
+
+**3. 创建数据表字段**
+
+在多维表格中创建以下字段：
+
+| 字段名 | 类型 | 说明 |
+|--------|------|------|
+| 作业名称 | 文本 | |
+| 工作目录 | 文本 | |
+| 计算机 | 文本 | |
+| 开始时间 | 日期 | |
+| 结束时间 | 日期 | |
+| 耗时 | 文本 | 格式："X小时 Y分钟" |
+| 进度 | 进度 | 0-100% |
+| 状态 | 单选 | 运行中、成功、失败、异常终止 |
+| 计算结果 | 文本 | |
+| ODB大小(MB) | 数字 | |
+| Total Time | 数字 | |
+| 更新时间 | 日期 | |
+
+**4. 配置 config.toml**
+
+```toml
+[bitable]
+enable = true
+app_id = "cli_a9e82413e7785cc2"
+app_secret = "your_app_secret"
+app_token = "bascnXXXXXX"
+table_id = "tblXXXXXX"
+```
+
+> 💡 多维表格同步与 CSV 记录可同时使用，数据会同时写入两者
+
 ---
 
 ## 🚀 使用方法
@@ -181,7 +242,9 @@ AbaqusGuard/
 │   │   └── 📄 process_detector.py # 进程检测
 │   ├── 📂 feishu/
 │   │   ├── 📄 __init__.py
-│   │   └── 📄 webhook_client.py   # 飞书通知客户端
+│   │   ├── 📄 webhook_client.py   # 飞书通知客户端
+│   │   ├── 📄 bitable_client.py   # 飞书多维表格 API 客户端
+│   │   └── 📄 bitable_logger.py   # 飞书多维表格记录器
 │   ├── 📂 wecom/
 │   │   ├── 📄 __init__.py
 │   │   └── 📄 webhook_client.py   # 企业微信通知客户端
@@ -253,6 +316,24 @@ max_history = 5
 <summary><b>📈 进度百分比显示为空是什么原因？</b></summary>
 
 进度百分比需要从 `.inp` 文件中解析总分析步时间。如果 `.inp` 文件不存在或格式不支持，则无法计算百分比。
+
+</details>
+
+<details>
+<summary><b>☁️ 飞书多维表格同步失败怎么办？</b></summary>
+
+请检查以下几点：
+1. 确认飞书应用是否有对应多维表格的写入权限
+2. 确认 `app_token` 和 `table_id` 是否正确
+3. 查看控制台日志，获取详细的错误信息
+4. 如果网络不稳定，系统会自动降级到 CSV 记录，不会影响监控功能
+
+</details>
+
+<details>
+<summary><b>☁️ 飞书多维表格和 CSV 可以同时使用吗？</b></summary>
+
+可以！两者完全独立，可以同时启用。作业数据会同时写入 CSV 本地文件和飞书多维表格，为您提供双重备份和更灵活的数据访问方式。
 
 </details>
 
