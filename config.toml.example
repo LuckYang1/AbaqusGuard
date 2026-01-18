@@ -86,23 +86,12 @@ wecom_url = ""
 [[webhook.routes]]
 channel = "feishu"
 events = ["start", "progress", "complete", "error", "orphan"]
-match_dir = "C:\\Users\\YSY\\Desktop"
+match_dir = "C:/Abaqus_Jobs"
 webhook_url = "https://www.feishu.cn/flow/api/trigger-webhook/xxx"
 
 [[webhook.routes]]
 channel = "feishu"
 events = ["start", "progress", "complete", "error", "orphan"]
-match_dir = "C:\\Users\\YSY\\Desktop"
+match_dir = "C:/Abaqus_Jobs"
 webhook_url = "https://www.feishu.cn/flow/api/trigger-webhook/yyy"
 
-[[webhook.routes]]
-channel = "wecom"
-events = ["start", "progress", "complete", "error", "orphan"]
-match_dir = "C:\\Users\\YSY\\Desktop"
-webhook_url = "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=aaa"
-
-[[webhook.routes]]
-channel = "wecom"
-events = ["start", "progress", "complete", "error", "orphan"]
-match_dir = "C:\\Users\\YSY\\Desktop"
-webhook_url = "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=bbb"
