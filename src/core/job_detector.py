@@ -9,14 +9,13 @@ import time
 from datetime import datetime
 
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
 
-from src.config.settings import get_settings
+from src.config.settings import get_settings, Settings
 from src.core.inp_parser import parse_total_step_time
 from src.core.progress_parser import StaParser, get_job_info
-from src.core.process_detector import get_process_detector
-from src.feishu.webhook_client import get_webhook_client
-from src.wecom.webhook_client import get_wecom_client
+from src.core.process_detector import get_process_detector, ProcessDetector
+from src.feishu.webhook_client import get_webhook_client, WebhookClient
+from src.wecom.webhook_client import get_wecom_client, WecomWebhookClient
 from src.models.job import JobInfo, JobStatus
 
 
@@ -25,22 +24,22 @@ class JobDetector:
 
     def __init__(self):
         """初始化检测器"""
-        self.settings = get_settings()
-        self.process_detector = get_process_detector()
-        self.webhook = get_webhook_client()
-        self.wecom = get_wecom_client()
+        self.settings: Settings = get_settings()
+        self.process_detector: ProcessDetector = get_process_detector()
+        self.webhook: WebhookClient = get_webhook_client()
+        self.wecom: WecomWebhookClient = get_wecom_client()
         # {目录: {作业名: JobInfo}}
-        self.running_jobs: Dict[Path, Dict[str, JobInfo]] = {}
+        self.running_jobs: dict[Path, dict[str, JobInfo]] = {}
         # {目录: {作业名: JobInfo}} - .lck 已消失但等待 .sta 写入最终状态
-        self.finishing_jobs: Dict[Path, Dict[str, JobInfo]] = {}
-        self.completed_jobs: List[JobInfo] = []
+        self.finishing_jobs: dict[Path, dict[str, JobInfo]] = {}
+        self.completed_jobs: list[JobInfo] = []
         # {目录: 已知的孤立 .lck 文件集合}
-        self.ignored_lck: Dict[Path, Set[str]] = {}
+        self.ignored_lck: dict[Path, set[str]] = {}
         # 上次目录变化信息
-        self._last_added_dirs: Set[Path] = set()
-        self._last_removed_dirs: Set[Path] = set()
+        self._last_added_dirs: set[Path] = set()
+        self._last_removed_dirs: set[Path] = set()
 
-    def _refresh_watch_dirs(self) -> Tuple[Set[Path], Set[Path]]:
+    def _refresh_watch_dirs(self) -> tuple[set[Path], set[Path]]:
         """
         刷新监控目录列表，返回新增和移除的目录
 
@@ -85,9 +84,9 @@ class JobDetector:
 
         # 处理移除目录（清理数据结构）
         for dir_path in removed:
-            self.running_jobs.pop(dir_path, None)
-            self.finishing_jobs.pop(dir_path, None)
-            self.ignored_lck.pop(dir_path, None)
+            _ = self.running_jobs.pop(dir_path, None)
+            _ = self.finishing_jobs.pop(dir_path, None)
+            _ = self.ignored_lck.pop(dir_path, None)
 
         # 保存变化信息
         self._last_added_dirs = added
@@ -95,7 +94,7 @@ class JobDetector:
 
         return added, removed
 
-    def scan_directories(self) -> List[JobInfo]:
+    def scan_directories(self) -> list[JobInfo]:
         """
         扫描所有监控目录，检测作业状态
 
@@ -105,7 +104,7 @@ class JobDetector:
         all_jobs = []
 
         # 刷新监控目录列表（支持热更新）
-        self._refresh_watch_dirs()
+        _ = self._refresh_watch_dirs()
 
         # 遍历所有实际监控的目录（包括根目录和直接子目录）
         monitored_dirs = list(self.running_jobs.keys())
@@ -116,7 +115,7 @@ class JobDetector:
 
         return all_jobs
 
-    def _scan_directory(self, directory: Path) -> List[JobInfo]:
+    def _scan_directory(self, directory: Path) -> list[JobInfo]:
         """
         扫描单个目录 - 使用集合运算处理作业状态
 
@@ -221,7 +220,7 @@ class JobDetector:
 
         return jobs
 
-    def _finalize_finishing_jobs(self, directory: Path, jobs: List[JobInfo]) -> None:
+    def _finalize_finishing_jobs(self, directory: Path, jobs: list[JobInfo]) -> None:
         """尝试将收尾中的作业落定为最终状态
 
         说明：Abaqus 可能先删除 .lck，再稍后将最终状态写入 .sta。
@@ -236,7 +235,7 @@ class JobDetector:
             return
 
         now = datetime.now()
-        keys_to_remove: List[str] = []
+        keys_to_remove: list[str] = []
 
         for job_name, job in finishing.items():
             # 无确认期则不应进入 finishing
@@ -271,9 +270,9 @@ class JobDetector:
                 keys_to_remove.append(job_name)
 
         for job_name in keys_to_remove:
-            finishing.pop(job_name, None)
+            _ = finishing.pop(job_name, None)
 
-    def _scan_lck_files(self, directory: Path) -> Set[str]:
+    def _scan_lck_files(self, directory: Path) -> set[str]:
         """
         扫描目录下的所有 .lck 文件
 
@@ -293,7 +292,7 @@ class JobDetector:
 
     def _handle_new_job(
         self, directory: Path, job_name: str, abaqus_running: bool
-    ) -> Optional[JobInfo]:
+    ) -> JobInfo | None:
         """
         处理新作业
 
@@ -410,16 +409,16 @@ class JobDetector:
 
         if self.settings.VERBOSE:
             print(f"作业异常终止: {job.name}")
-            print(f"   Abaqus 进程已停止，但 .lck 文件仍存在")
+            print("   Abaqus 进程已停止，但 .lck 文件仍存在")
             print(f"   运行时长: {duration_str}")
 
         # 发送孤立作业警告通知
         for url in self.settings.select_webhook_urls(job, "orphan", "feishu"):
-            self.webhook.send_orphan_job_warning(
+            _ = self.webhook.send_orphan_job_warning(
                 job, job_info, duration_str, webhook_url=url
             )
         for url in self.settings.select_webhook_urls(job, "orphan", "wecom"):
-            self.wecom.send_orphan_job_warning(
+            _ = self.wecom.send_orphan_job_warning(
                 job, job_info, duration_str, webhook_url=url
             )
 
@@ -468,7 +467,7 @@ class JobDetector:
 
     # ============ 兼容旧接口的方法 ============
 
-    def get_new_jobs(self, previously_known: Dict[str, JobInfo]) -> List[JobInfo]:
+    def get_new_jobs(self, previously_known: dict[str, JobInfo]) -> list[JobInfo]:
         """
         获取新检测到的作业（兼容旧接口）
 
@@ -497,7 +496,7 @@ class JobDetector:
 
         return new_jobs
 
-    def get_running_jobs(self) -> List[JobInfo]:
+    def get_running_jobs(self) -> list[JobInfo]:
         """获取当前运行中的作业"""
         jobs = []
         for directory_jobs in self.running_jobs.values():
