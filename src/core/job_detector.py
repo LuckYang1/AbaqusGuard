@@ -8,6 +8,7 @@ import os
 import socket
 import time
 from datetime import datetime
+
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
@@ -31,6 +32,8 @@ class JobDetector:
         self.wecom = get_wecom_client()
         # {目录: {作业名: JobInfo}}
         self.running_jobs: Dict[Path, Dict[str, JobInfo]] = {}
+        # {目录: {作业名: JobInfo}} - .lck 已消失但等待 .sta 写入最终状态
+        self.finishing_jobs: Dict[Path, Dict[str, JobInfo]] = {}
         self.completed_jobs: List[JobInfo] = []
         # {目录: 已知的孤立 .lck 文件集合}
         self.ignored_lck: Dict[Path, Set[str]] = {}
@@ -59,14 +62,16 @@ class JobDetector:
         # 处理新增目录（初始化数据结构）
         for dir_path in added:
             self.running_jobs[dir_path] = {}
+            self.finishing_jobs[dir_path] = {}
             self.ignored_lck[dir_path] = set()
 
         # 处理移除目录（清理数据结构）
         for dir_path in removed:
             self.running_jobs.pop(dir_path, None)
+            self.finishing_jobs.pop(dir_path, None)
             self.ignored_lck.pop(dir_path, None)
 
-        # 更新 settings
+        # 更新 settings（确保类型一致）
         self.settings.WATCH_DIRS = [str(d) for d in new_dirs]
 
         # 保存变化信息
@@ -87,11 +92,13 @@ class JobDetector:
         # 刷新监控目录列表（支持热更新）
         self._refresh_watch_dirs()
 
-        for watch_dir in self.settings.WATCH_DIRS:
+        for watch_dir in self.settings.WATCH_DIRS or []:
             watch_path = Path(watch_dir)
             # 初始化该目录的数据结构（新增目录已在 _refresh_watch_dirs 中处理）
             if watch_path not in self.running_jobs:
                 self.running_jobs[watch_path] = {}
+            if watch_path not in self.finishing_jobs:
+                self.finishing_jobs[watch_path] = {}
             if watch_path not in self.ignored_lck:
                 self.ignored_lck[watch_path] = set()
 
@@ -122,8 +129,10 @@ class JobDetector:
         # 1. 获取当前所有 .lck 文件
         current_lck = self._scan_lck_files(directory)
 
-        # 2. 获取之前活跃的作业
-        previous_jobs = set(self.running_jobs[directory].keys())
+        # 2. 获取之前活跃的作业（运行中 + 收尾中）
+        previous_jobs = set(self.running_jobs[directory].keys()) | set(
+            self.finishing_jobs[directory].keys()
+        )
 
         # 3. 清理已删除的孤立 .lck 文件
         removed_ignored = self.ignored_lck[directory] - current_lck
@@ -147,17 +156,33 @@ class JobDetector:
             if job:
                 jobs.append(job)
 
-        # 7. 处理结束的作业 = 之前的 - 当前的
+        # 7. 处理结束信号：.lck 消失后进入“收尾中”，等待 .sta 写入最终状态
         ended_jobs = previous_jobs - current_lck
         for job_name in ended_jobs:
-            job = self.running_jobs[directory].pop(job_name)
-            self._handle_job_end(job, directory)
+            job = self.running_jobs[directory].pop(job_name, None)
+            if job is None:
+                job = self.finishing_jobs[directory].pop(job_name, None)
+
+            if job is None:
+                continue
+
+            if self.settings.JOB_END_CONFIRM_PERIOD <= 0:
+                self._handle_job_end(job, directory)
+                jobs.append(job)
+                continue
+
+            job.status = JobStatus.FINISHING
+            job.end_detected_time = datetime.now()
+            self.finishing_jobs[directory][job_name] = job
             jobs.append(job)
 
-        # 8. 计算仍然活跃的作业 = 之前的 & 有效的
+        # 8. 尝试将“收尾中”的作业落定（success/failed/timeout）
+        self._finalize_finishing_jobs(directory, jobs)
+
+        # 9. 计算仍然活跃的作业 = 之前的 & 有效的
         active_jobs_now = previous_jobs & effective_lck
 
-        # 9. 检查活跃作业是否变成孤立（进程停止但 .lck 未删除）
+        # 10. 检查活跃作业是否变成孤立（进程停止但 .lck 未删除）
         active_jobs_after_orphan_check = set()
         if (
             self.settings.ENABLE_PROCESS_DETECTION
@@ -179,13 +204,65 @@ class JobDetector:
         else:
             active_jobs_after_orphan_check = active_jobs_now
 
-        # 10. 更新活跃作业的进度
+        # 11. 更新活跃作业的进度
         for job_name in active_jobs_after_orphan_check:
             job = self.running_jobs[directory][job_name]
             self._update_job_progress(job, directory)
             jobs.append(job)
 
         return jobs
+
+    def _finalize_finishing_jobs(self, directory: Path, jobs: List[JobInfo]) -> None:
+        """尝试将收尾中的作业落定为最终状态
+
+        说明：Abaqus 可能先删除 .lck，再稍后将最终状态写入 .sta。
+        因此在确认期内多轮读取 .sta，若仍无法判断则超时标记为异常终止。
+
+        Args:
+            directory: 作业目录
+            jobs: 本轮要返回的作业列表（就地 append 完成状态的 job）
+        """
+        finishing = self.finishing_jobs.get(directory)
+        if not finishing:
+            return
+
+        now = datetime.now()
+        keys_to_remove: List[str] = []
+
+        for job_name, job in finishing.items():
+            # 无确认期则不应进入 finishing
+            if self.settings.JOB_END_CONFIRM_PERIOD <= 0:
+                keys_to_remove.append(job_name)
+                continue
+
+            # 如果缺少 end_detected_time，补齐（兼容旧状态）
+            if job.end_detected_time is None:
+                job.end_detected_time = now
+
+            elapsed = (now - job.end_detected_time).total_seconds()
+
+            sta_file = Path(directory) / f"{job.name}.sta"
+            status_str = StaParser.get_status_from_file(sta_file)
+
+            if status_str in ("success", "failed"):
+                # 读取到了最终状态，直接落定
+                self._handle_job_end(job, directory)
+                jobs.append(job)
+                keys_to_remove.append(job_name)
+                continue
+
+            if elapsed >= self.settings.JOB_END_CONFIRM_PERIOD:
+                # 超时仍无法判断，认为异常终止
+                job.mark_completed(JobStatus.ABORTED, "作业异常终止 - 结束确认期超时")
+                self._update_odb_size(job, directory)
+                if self.settings.VERBOSE:
+                    print(f"作业完成: {job.name} - {job.status.value}")
+                self.completed_jobs.append(job)
+                jobs.append(job)
+                keys_to_remove.append(job_name)
+
+        for job_name in keys_to_remove:
+            finishing.pop(job_name, None)
 
     def _scan_lck_files(self, directory: Path) -> Set[str]:
         """

@@ -30,7 +30,7 @@ Thumbs.db
 .claude/
 
 # 测试数据文件
-tests/*.sta
+tests/
 
 # 其他忽略
 飞书多维表格api指南

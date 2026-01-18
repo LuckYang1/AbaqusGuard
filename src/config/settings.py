@@ -5,7 +5,7 @@
 
 import os
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional
 
 from dotenv import load_dotenv
 
@@ -32,12 +32,19 @@ class Settings:
     CSV_MAX_HISTORY: int = 5  # 保留最近 N 条记录，0 表示不限制
 
     # Abaqus 监控配置
-    WATCH_DIRS: List[str] = None
+    WATCH_DIRS: Optional[List[str]] = None
     POLL_INTERVAL: int = 5
     VERBOSE: bool = True
     PROGRESS_NOTIFY_INTERVAL: int = 3600
     ENABLE_PROCESS_DETECTION: bool = True
     LCK_GRACE_PERIOD: int = 60
+    JOB_END_CONFIRM_PERIOD: int = 60  # .lck 删除后的结束确认期（秒），0 表示禁用
+
+    # 通知去重与进度阈值
+    NOTIFY_DEDUPE_TTL: int = 3600  # 通知去重窗口（秒）
+    PROGRESS_NOTIFY_MIN_TOTAL_TIME_DELTA: float = (
+        0.0  # Total Time 最小增量阈值（<=0 表示不启用）
+    )
 
     def __post_init__(self):
         """初始化后处理，转换类型和设置默认值"""
@@ -77,6 +84,18 @@ class Settings:
         self.LCK_GRACE_PERIOD = int(
             os.getenv("LCK_GRACE_PERIOD", str(self.LCK_GRACE_PERIOD))
         )
+        self.JOB_END_CONFIRM_PERIOD = int(
+            os.getenv("JOB_END_CONFIRM_PERIOD", str(self.JOB_END_CONFIRM_PERIOD))
+        )
+        self.NOTIFY_DEDUPE_TTL = int(
+            os.getenv("NOTIFY_DEDUPE_TTL", str(self.NOTIFY_DEDUPE_TTL))
+        )
+        self.PROGRESS_NOTIFY_MIN_TOTAL_TIME_DELTA = float(
+            os.getenv(
+                "PROGRESS_NOTIFY_MIN_TOTAL_TIME_DELTA",
+                str(self.PROGRESS_NOTIFY_MIN_TOTAL_TIME_DELTA),
+            )
+        )
 
     @staticmethod
     def _parse_bool(value: str, default: bool) -> bool:
@@ -91,7 +110,6 @@ class Settings:
         return cls(
             FEISHU_WEBHOOK_URL=os.getenv("FEISHU_WEBHOOK_URL", ""),
             WECOM_WEBHOOK_URL=os.getenv("WECOM_WEBHOOK_URL", ""),
-            WATCH_DIRS=None,  # 在 __post_init__ 中处理
         )
 
 

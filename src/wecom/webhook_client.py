@@ -8,6 +8,7 @@ from pathlib import Path
 import requests
 
 from src.config.settings import get_settings
+from src.core.notify_dedupe import get_notification_deduper
 from src.models.job import JobInfo
 
 
@@ -62,7 +63,12 @@ class WecomWebhookClient:
             return False
 
     def send(
-        self, title: str, content: str, is_success: bool = True, job: JobInfo | None = None
+        self,
+        title: str,
+        content: str,
+        is_success: bool = True,
+        job: JobInfo | None = None,
+        idempotency_key: str = "",
     ) -> bool:
         """
         发送企业微信通知（Markdown 格式）
@@ -76,10 +82,16 @@ class WecomWebhookClient:
         Returns:
             是否发送成功
         """
+        deduper = get_notification_deduper(self.settings.NOTIFY_DEDUPE_TTL)
+        if idempotency_key and not deduper.should_send(idempotency_key):
+            if self.settings.VERBOSE:
+                print(f"跳过重复通知: {title}")
+            return False
+
         # 状态标识
         # 企业微信 Markdown 支持的字体颜色: info(绿色), comment(灰色), warning(橙红色)
         status_color = "info" if is_success else "warning"
-        
+
         if job:
             status_text = job.status.value
         else:
@@ -109,7 +121,14 @@ class WecomWebhookClient:
 开始时间: {job.start_time.strftime("%Y-%m-%d %H:%M:%S")}
 
 正在计算中，请等待完成通知..."""
-        return self.send("[Abaqus] 计算开始", content, is_success=True, job=job)
+        key = f"wecom:job:{job.name}@{job.work_dir}#{int(job.start_time.timestamp())}:start"
+        return self.send(
+            "[Abaqus] 计算开始",
+            content,
+            is_success=True,
+            job=job,
+            idempotency_key=key,
+        )
 
     def _get_sta_last_lines(self, job: JobInfo, count: int = 3) -> str:
         """获取 .sta 文件的最后几行"""
@@ -175,7 +194,14 @@ class WecomWebhookClient:
 
 当前进度:
 Step: {job.step} | Increment: {job.increment} | Step Time: {job.step_time:.3f} | Inc Time: {job.inc_time:.4f} | Total Time: {job.total_time:.2f}{progress_line}{sta_section}"""
-        return self.send("[Abaqus] 计算进度", content, is_success=True, job=job)
+        key = f"wecom:job:{job.name}@{job.work_dir}#{int(job.start_time.timestamp())}:progress:{job.step}:{job.increment}"
+        return self.send(
+            "[Abaqus] 计算进度",
+            content,
+            is_success=True,
+            job=job,
+            idempotency_key=key,
+        )
 
     def send_job_complete(self, job: JobInfo) -> bool:
         """发送作业完成通知"""
@@ -186,11 +212,13 @@ Step: {job.step} | Increment: {job.increment} | Step Time: {job.step_time:.3f} |
 计算耗时: {job.duration or "未知"}
 Total Time: {job.total_time:.2f}
 ODB大小: {job.odb_size_mb} MB"""
+        key = f"wecom:job:{job.name}@{job.work_dir}#{int(job.start_time.timestamp())}:complete:{job.status.value}"
         return self.send(
             f"[{job.status.value}] Abaqus 计算完成",
             content,
             is_success=is_success,
             job=job,
+            idempotency_key=key,
         )
 
     def send_job_error(self, job: JobInfo, error: str) -> bool:
@@ -198,7 +226,14 @@ ODB大小: {job.odb_size_mb} MB"""
         content = f"""作业名称: {job.name}
 工作目录: {job.work_dir}
 错误信息: {error}"""
-        return self.send("[异常] Abaqus 计算错误", content, is_success=False, job=job)
+        key = f"wecom:job:{job.name}@{job.work_dir}#{int(job.start_time.timestamp())}:error"
+        return self.send(
+            "[异常] Abaqus 计算错误",
+            content,
+            is_success=False,
+            job=job,
+            idempotency_key=key,
+        )
 
     def send_orphan_job_warning(
         self, job: JobInfo, job_info: str, duration_str: str
@@ -228,7 +263,14 @@ Total Time: {job.total_time:.2f}
 
 提示: 请检查 .msg 和 .dat 文件了解详细信息
 如需清理，请手动删除 .lck 文件"""
-        return self.send("⚠️ Abaqus 作业异常终止", content, is_success=False, job=job)
+        key = f"wecom:job:{job.name}@{job.work_dir}#{int(job.start_time.timestamp())}:orphan"
+        return self.send(
+            "⚠️ Abaqus 作业异常终止",
+            content,
+            is_success=False,
+            job=job,
+            idempotency_key=key,
+        )
 
 
 # 全局客户端实例

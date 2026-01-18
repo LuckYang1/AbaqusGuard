@@ -1,6 +1,7 @@
 """
 作业数据模型
 """
+
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -9,7 +10,9 @@ from typing import Optional
 
 class JobStatus(Enum):
     """作业状态枚举"""
+
     RUNNING = "运行中"
+    FINISHING = "收尾中"
     SUCCESS = "成功"
     FAILED = "失败"
     ABORTED = "异常终止"
@@ -18,26 +21,28 @@ class JobStatus(Enum):
 @dataclass
 class JobInfo:
     """Abaqus 作业信息"""
-    name: str                              # 作业名称
-    work_dir: str                          # 工作目录
-    computer: str                          # 计算机名
-    start_time: datetime                   # 开始时间
-    end_time: Optional[datetime] = None    # 结束时间
+
+    name: str  # 作业名称
+    work_dir: str  # 工作目录
+    computer: str  # 计算机名
+    start_time: datetime  # 开始时间
+    end_time: Optional[datetime] = None  # 结束时间
+    end_detected_time: Optional[datetime] = None  # 检测到结束信号的时间（.lck 消失）
     status: JobStatus = JobStatus.RUNNING  # 状态
-    result: str = ""                       # 计算结果描述
-    odb_size_mb: float = 0.0               # ODB大小
-    total_time: float = 0.0                # .sta中的Total Time
-    frequency: float = 0.0                 # .sta中的Frequency
-    step_time: float = 0.0                 # .sta中的Step Time
-    inc_time: float = 0.0                  # .sta中的Inc of Step Time
-    step: int = 0                          # 当前Step
-    increment: int = 0                     # 当前Increment
+    result: str = ""  # 计算结果描述
+    odb_size_mb: float = 0.0  # ODB大小
+    total_time: float = 0.0  # .sta中的Total Time
+    frequency: float = 0.0  # .sta中的Frequency
+    step_time: float = 0.0  # .sta中的Step Time
+    inc_time: float = 0.0  # .sta中的Inc of Step Time
+    step: int = 0  # 当前Step
+    increment: int = 0  # 当前Increment
 
     # 是否为孤立作业（进程停止但 .lck 未删除）
-    is_orphan: bool = False                # 孤立作业标记
+    is_orphan: bool = False  # 孤立作业标记
 
     # 总分析步时间（从 .inp 文件解析）
-    total_step_time: float = 0.0           # 总分析步时间
+    total_step_time: float = 0.0  # 总分析步时间
 
     @property
     def duration(self) -> Optional[str]:

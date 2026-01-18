@@ -13,7 +13,7 @@ from src.core.job_detector import JobDetector
 from src.core.csv_logger import JobCSVLogger, init_csv_logger
 from src.feishu.webhook_client import get_webhook_client
 from src.wecom.webhook_client import get_wecom_client
-from src.models.job import JobInfo
+from src.models.job import JobInfo, JobStatus
 
 
 class AbaqusMonitor:
@@ -37,6 +37,8 @@ class AbaqusMonitor:
         self.tracked_jobs: Dict[str, JobInfo] = {}
         # 上次进度通知时间
         self.last_progress_notify: Dict[str, datetime] = {}
+        # 上次进度快照（用于“无变化不推送”）
+        self.last_progress_snapshot: Dict[str, tuple[int, int, float]] = {}
         # 上次 CSV 更新时间
         self.last_csv_update: Dict[str, datetime] = {}
 
@@ -83,7 +85,9 @@ class AbaqusMonitor:
                         # 从跟踪列表移除
                         self.tracked_jobs.pop(job_key, None)
                         self.last_progress_notify.pop(job_key, None)
+                        self.last_progress_snapshot.pop(job_key, None)
                         self.last_csv_update.pop(job_key, None)
+
                     else:
                         # 检查是否需要发送进度通知
                         self._check_progress_notify(job)
@@ -121,6 +125,7 @@ class AbaqusMonitor:
         for job_key in keys_to_remove:
             self.tracked_jobs.pop(job_key, None)
             self.last_progress_notify.pop(job_key, None)
+            self.last_progress_snapshot.pop(job_key, None)
             self.last_csv_update.pop(job_key, None)
 
     def _on_job_start(self, job: JobInfo):
@@ -173,14 +178,20 @@ class AbaqusMonitor:
         """检查是否需要发送进度通知"""
         if self.settings.PROGRESS_NOTIFY_INTERVAL <= 0:
             return
+        if job.status == JobStatus.FINISHING:
+            return
 
         job_key = self._get_job_key(job)
         last_notify = self.last_progress_notify.get(job_key)
         now = datetime.now()
 
+        snapshot = (job.step, job.increment, float(job.total_time))
+        last_snapshot = self.last_progress_snapshot.get(job_key)
+
         if not last_notify:
             # 第一次运行，立即发送初始进度通知
             self.last_progress_notify[job_key] = now
+            self.last_progress_snapshot[job_key] = snapshot
             self._log(f"进度更新: {job.name} - Step:{job.step} Inc:{job.increment}")
 
             if self.settings.FEISHU_WEBHOOK_URL:
@@ -192,6 +203,15 @@ class AbaqusMonitor:
         elapsed = (now - last_notify).total_seconds()
 
         if elapsed >= self.settings.PROGRESS_NOTIFY_INTERVAL:
+            # 除时间间隔外，再加一层“进度有变化”判断，避免重复推送
+            min_delta = float(self.settings.PROGRESS_NOTIFY_MIN_TOTAL_TIME_DELTA)
+            changed = last_snapshot != snapshot
+            if (not changed) and min_delta > 0 and last_snapshot is not None:
+                changed = (snapshot[2] - last_snapshot[2]) >= min_delta
+
+            if not changed:
+                return
+
             self._log(f"进度更新: {job.name} - Step:{job.step} Inc:{job.increment}")
 
             if self.settings.FEISHU_WEBHOOK_URL:
@@ -200,6 +220,7 @@ class AbaqusMonitor:
                 self.wecom.send_job_progress(job)
 
             self.last_progress_notify[job_key] = now
+            self.last_progress_snapshot[job_key] = snapshot
 
     def _check_csv_update(self, job: JobInfo):
         """检查是否需要更新 CSV 记录"""

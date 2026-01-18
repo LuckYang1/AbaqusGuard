@@ -2,10 +2,11 @@
 .sta 文件解析器
 解析 Abaqus 状态文件获取作业进度信息
 """
+
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 
 class StaParser:
@@ -26,7 +27,7 @@ class StaParser:
         self.sta_file = Path(sta_file)
         self.is_explicit = False  # 是否为 Explicit 分析
 
-    def parse(self) -> Dict[str, any]:
+    def parse(self) -> Dict[str, Any]:
         """
         解析 .sta 文件，自动识别 Standard 和 Explicit 格式
 
@@ -78,7 +79,8 @@ class StaParser:
             # 解析第一行获取开始时间
             result["start_time"] = self._parse_start_time(first_line)
 
-            # 解析最后一行状态（需要找到非 INSTANCE 行）
+            # 解析状态：不要只看“最后一行”，因为末尾经常是数据行
+            # 采用倒序扫描关键字：优先命中 success/failed，否则再回退为 running/unknown
             last_line = ""
             for line in reversed(lines):
                 stripped = line.strip()
@@ -86,7 +88,9 @@ class StaParser:
                     last_line = stripped
                     break
             result["last_line"] = last_line
-            result["status"] = self._get_status_from_line(last_line)
+
+            status = self._get_status_from_lines(lines)
+            result["status"] = status
 
             # 获取最后30行非空行（Explicit 文件可能有更多信息行）
             last_lines = [line.rstrip() for line in lines[-30:] if line.strip()]
@@ -142,18 +146,30 @@ class StaParser:
     def _parse_chinese_month(month_str: str) -> int:
         """解析中文月份"""
         month_map = {
-            "1": 1, "一": 1,
-            "2": 2, "二": 2,
-            "3": 3, "三": 3,
-            "4": 4, "四": 4,
-            "5": 5, "五": 5,
-            "6": 6, "六": 6,
-            "7": 7, "七": 7,
-            "8": 8, "八": 8,
-            "9": 9, "九": 9,
-            "10": 10, "十": 10,
-            "11": 11, "十一": 11,
-            "12": 12, "十二": 12,
+            "1": 1,
+            "一": 1,
+            "2": 2,
+            "二": 2,
+            "3": 3,
+            "三": 3,
+            "4": 4,
+            "四": 4,
+            "5": 5,
+            "五": 5,
+            "6": 6,
+            "六": 6,
+            "7": 7,
+            "七": 7,
+            "8": 8,
+            "八": 8,
+            "9": 9,
+            "九": 9,
+            "10": 10,
+            "十": 10,
+            "11": 11,
+            "十一": 11,
+            "12": 12,
+            "十二": 12,
         }
         return month_map.get(month_str, 1)
 
@@ -170,15 +186,48 @@ class StaParser:
         # 跳过标题行和状态行
         line_upper = line.upper()
         skip_keywords = [
-            "STEP", "INC", "SEVERE", "SUMMARY", "ITER",
-            "ABAQUS", "DATE", "TIME", "COMPLETED", "ANALYSIS",
-            "DISCON", "FREQ", "MONITOR", "RIKS", "TOTAL",
-            "INSTANCE", "DOMAIN", "OUTPUT", "FIELD", "FRAME",
-            "WARNING", "NOTE", "ERROR", "MEMORY", "SCALING",
-            "MASS", "INERTIA", "ELEMENT", "NODE", "WEIGHT",
-            "CRITICAL", "STABLE", "STATISTICS", "MEAN",
-            "PREPROCESSOR", "SOLUTION", "PROGRESS", "ORIGIN",
-            "INFORMATION", "CONTACT", "OVERCLOSURE", "PENETRAT",
+            "STEP",
+            "INC",
+            "SEVERE",
+            "SUMMARY",
+            "ITER",
+            "ABAQUS",
+            "DATE",
+            "TIME",
+            "COMPLETED",
+            "ANALYSIS",
+            "DISCON",
+            "FREQ",
+            "MONITOR",
+            "RIKS",
+            "TOTAL",
+            "INSTANCE",
+            "DOMAIN",
+            "OUTPUT",
+            "FIELD",
+            "FRAME",
+            "WARNING",
+            "NOTE",
+            "ERROR",
+            "MEMORY",
+            "SCALING",
+            "MASS",
+            "INERTIA",
+            "ELEMENT",
+            "NODE",
+            "WEIGHT",
+            "CRITICAL",
+            "STABLE",
+            "STATISTICS",
+            "MEAN",
+            "PREPROCESSOR",
+            "SOLUTION",
+            "PROGRESS",
+            "ORIGIN",
+            "INFORMATION",
+            "CONTACT",
+            "OVERCLOSURE",
+            "PENETRAT",
         ]
         if any(keyword in line_upper for keyword in skip_keywords):
             return False
@@ -210,10 +259,10 @@ class StaParser:
                 if len(parts) >= 6:
                     return {
                         "step": 1,  # Explicit 通常只有一个 step
-                        "increment": int(parts[0]),           # INCREMENT
-                        "step_time": float(parts[1]),         # STEP TIME
-                        "total_time": float(parts[2]),        # TOTAL TIME (第3列，用户需要的)
-                        "inc_time": float(parts[4]),          # STABLE INCREMENT (稳定时间增量)
+                        "increment": int(parts[0]),  # INCREMENT
+                        "step_time": float(parts[1]),  # STEP TIME
+                        "total_time": float(parts[2]),  # TOTAL TIME (第3列，用户需要的)
+                        "inc_time": float(parts[4]),  # STABLE INCREMENT (稳定时间增量)
                         "attempts": 0,
                     }
             else:
@@ -223,33 +272,52 @@ class StaParser:
                         "step": int(parts[0]),
                         "increment": int(parts[1]),
                         "attempts": int(parts[2]) if len(parts) > 2 else 0,
-                        "total_time": float(parts[6]),      # Total Time/Freq (第7列)
-                        "step_time": float(parts[7]) if len(parts) > 7 else 0.0,   # Step Time/LPF (第8列)
-                        "inc_time": float(parts[8]) if len(parts) > 8 else 0.0,   # Inc of Step Time/LPF (第9列)
+                        "total_time": float(parts[6]),  # Total Time/Freq (第7列)
+                        "step_time": float(parts[7])
+                        if len(parts) > 7
+                        else 0.0,  # Step Time/LPF (第8列)
+                        "inc_time": float(parts[8])
+                        if len(parts) > 8
+                        else 0.0,  # Inc of Step Time/LPF (第9列)
                     }
         except (ValueError, IndexError):
             pass
 
         return None
 
-    def _get_status_from_line(self, line: str) -> str:
-        """
-        根据最后一行判断状态
+    def _get_status_from_lines(self, lines: List[str]) -> str:
+        """从多行内容中推断状态（更稳健）
+
+        说明：.sta 文件末尾经常是数值数据行，直接取最后一行会误判。
+        策略：倒序扫描文本行，优先匹配成功/失败关键字；若都未出现，再回退。
+
+        Args:
+            lines: .sta 文件所有行
 
         Returns:
             "success", "failed", "running", "unknown"
         """
-        line_upper = line.upper()
+        # 倒序扫描，尽快命中结束标识
+        for raw in reversed(lines):
+            line = raw.strip()
+            if not line:
+                continue
 
-        if self.STATUS_SUCCESS in line_upper:
-            return "success"
-        elif self.STATUS_NOT_COMPLETED in line_upper or self.STATUS_ERROR in line_upper:
-            return "failed"
-        elif line:
-            # 有内容但不是已知完成状态,可能是运行中
-            return "running"
+            line_upper = line.upper()
+            if self.STATUS_SUCCESS in line_upper:
+                return "success"
+            if (
+                self.STATUS_NOT_COMPLETED in line_upper
+                or self.STATUS_ERROR in line_upper
+            ):
+                return "failed"
 
-        return "unknown"
+        # 没有出现明确完成/失败关键字：如果文件存在且有内容，通常表示运行中
+        return "running" if any(l.strip() for l in lines) else "unknown"
+
+    def _get_status_from_line(self, line: str) -> str:
+        """兼容旧接口：从单行推断状态"""
+        return self._get_status_from_lines([line])
 
     @classmethod
     def get_status_from_file(cls, sta_file: Path) -> str:
@@ -304,15 +372,15 @@ def get_job_info(sta_path: Path) -> str:
         info_lines.append(f"最后修改: {mtime.strftime('%Y-%m-%d %H:%M:%S')}")
 
     # 检查 .odb 文件
-    odb_path = sta_path.with_suffix('.odb')
+    odb_path = sta_path.with_suffix(".odb")
     if odb_path.exists():
         odb_size_mb = odb_path.stat().st_size / (1024 * 1024)
         info_lines.append(f"ODB文件: {odb_size_mb:.2f} MB")
 
     # 检查 .dat 文件
-    dat_path = sta_path.with_suffix('.dat')
+    dat_path = sta_path.with_suffix(".dat")
     if dat_path.exists():
         dat_size_mb = dat_path.stat().st_size / (1024 * 1024)
         info_lines.append(f"DAT文件: {dat_size_mb:.2f} MB")
 
-    return '\n'.join(info_lines) if info_lines else "无额外信息"
+    return "\n".join(info_lines) if info_lines else "无额外信息"

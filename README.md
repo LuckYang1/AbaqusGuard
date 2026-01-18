@@ -93,6 +93,9 @@ notepad .env
 | `PROGRESS_NOTIFY_INTERVAL` | `3600` | 进度通知间隔（秒） |
 | `ENABLE_PROCESS_DETECTION` | `true` | 是否启用进程检测 |
 | `LCK_GRACE_PERIOD` | `60` | .lck 文件宽限期（秒） |
+| `JOB_END_CONFIRM_PERIOD` | `60` | .lck 删除后的结束确认期（秒），避免 .sta 收尾写入导致误判 |
+| `NOTIFY_DEDUPE_TTL` | `3600` | 通知去重窗口（秒），防止相同事件重复发送 |
+| `PROGRESS_NOTIFY_MIN_TOTAL_TIME_DELTA` | `0` | Total Time 最小增量阈值（>0 时可用于触发进度推送） |
 
 ---
 
