@@ -133,6 +133,7 @@ webhook_url = "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=bbb"
 | `bitable.app_secret` | 空 | 飞书应用 Secret |
 | `bitable.app_token` | 空 | 多维表格的 App Token |
 | `bitable.table_id` | 空 | 数据表的 Table ID |
+| `bitable.update_interval` | `60` | 多维表格更新间隔（秒） |
 
 #### 📌 多维表格配置步骤
 

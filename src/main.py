@@ -62,6 +62,8 @@ class AbaqusMonitor:
         self.last_progress_snapshot: Dict[str, tuple[int, int, float]] = {}
         # 上次 CSV 更新时间
         self.last_csv_update: Dict[str, datetime] = {}
+        # 上次飞书多维表格更新时间
+        self.last_bitable_update: Dict[str, datetime] = {}
 
     def run(self):
         """运行监控循环"""
@@ -108,12 +110,15 @@ class AbaqusMonitor:
                         self.last_progress_notify.pop(job_key, None)
                         self.last_progress_snapshot.pop(job_key, None)
                         self.last_csv_update.pop(job_key, None)
+                        self.last_bitable_update.pop(job_key, None)
 
                     else:
                         # 检查是否需要发送进度通知
                         self._check_progress_notify(job)
                         # 检查是否需要更新 CSV
                         self._check_csv_update(job)
+                        # 检查是否需要更新飞书多维表格
+                        self._check_bitable_update(job)
 
         except Exception as e:
             self._log(f"扫描异常: {e}")
@@ -167,6 +172,7 @@ class AbaqusMonitor:
             self.last_progress_notify.pop(job_key, None)
             self.last_progress_snapshot.pop(job_key, None)
             self.last_csv_update.pop(job_key, None)
+            self.last_bitable_update.pop(job_key, None)
 
     def _on_job_start(self, job: JobInfo):
         """处理作业开始事件"""
@@ -291,6 +297,28 @@ class AbaqusMonitor:
         if elapsed >= self.settings.CSV_UPDATE_INTERVAL:
             self.csv_logger.update_job(job)
             self.last_csv_update[job_key] = now
+
+    def _check_bitable_update(self, job: JobInfo):
+        """检查是否需要更新飞书多维表格记录"""
+        if not self.bitable_logger:
+            return
+        if self.settings.BITABLE_UPDATE_INTERVAL <= 0:
+            return
+
+        job_key = self._get_job_key(job)
+        last_update = self.last_bitable_update.get(job_key)
+        now = datetime.now()
+
+        if not last_update:
+            # 第一次，记录时间但不更新（刚添加过）
+            self.last_bitable_update[job_key] = now
+            return
+
+        elapsed = (now - last_update).total_seconds()
+
+        if elapsed >= self.settings.BITABLE_UPDATE_INTERVAL:
+            self.bitable_logger.update_job(job)
+            self.last_bitable_update[job_key] = now
 
     def _get_job_key(self, job: JobInfo) -> str:
         """获取作业唯一标识"""

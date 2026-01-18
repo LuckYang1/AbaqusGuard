@@ -97,6 +97,7 @@ class Settings:
     BITABLE_APP_SECRET: str = ""  # 飞书应用 Secret
     BITABLE_APP_TOKEN: str = ""  # 多维表格 token
     BITABLE_TABLE_ID: str = ""  # 数据表 ID
+    BITABLE_UPDATE_INTERVAL: int = 60  # 多维表格更新间隔（秒）
 
     def __post_init__(self):
         """初始化后处理，转换类型和设置默认值"""
@@ -215,6 +216,7 @@ class Settings:
             BITABLE_APP_SECRET=_get_str(bitable_config, "app_secret", ""),
             BITABLE_APP_TOKEN=_get_str(bitable_config, "app_token", ""),
             BITABLE_TABLE_ID=_get_str(bitable_config, "table_id", ""),
+            BITABLE_UPDATE_INTERVAL=_get_int(bitable_config, "update_interval", 60),
         )
 
 
