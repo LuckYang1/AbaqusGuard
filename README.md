@@ -44,7 +44,7 @@ cd AbaqusGuard
 uv sync
 
 # 复制配置文件
-cp config.toml.example config.toml
+cp config_example.toml config.toml
 
 # 编辑配置
 notepad config.toml
@@ -196,7 +196,7 @@ max_history = 5  # 保留最近 5 条记录
 ### 启动监控
 
 ```bash
-uv run python run.py
+uv run run.py
 ```
 
 ### 动态修改监控目录
