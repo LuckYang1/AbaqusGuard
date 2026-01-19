@@ -1,0 +1,229 @@
+# AbaqusGuard 配置文件
+# ------------------------------------------
+# 1. 监控目录配置
+# ------------------------------------------
+# 需要监控的文件夹路径，支持多个目录
+# 路径分隔符建议使用正斜杠 /
+watch_dirs = ["C:/Abaqus_Jobs"]
+
+# ------------------------------------------
+# 2. 监控与通知基础配置
+# ------------------------------------------
+# 轮询间隔（秒）
+poll_interval = 5
+
+# 是否输出详细日志到控制台（true/false）
+verbose = true
+
+# 进度通知间隔（秒）
+progress_notify_interval = 3600
+
+# 是否启用进程检测
+# 开启后会检查 lck 文件对应的 Abaqus 进程是否存在
+# 如果进程不存在但 lck 存在，将判定为"异常终止"
+enable_process_detection = true
+
+# .lck 文件宽限期（秒）
+lck_grace_period = 60
+
+# .lck 删除后的结束确认期（秒）
+# 设为 0 表示禁用（恢复为"lck 一消失就立刻落定状态"的旧行为）
+job_end_confirm_period = 60
+
+# 通知去重窗口（秒）
+notify_dedupe_ttl = 3600
+
+# Total Time 最小增量阈值（可选）
+# 进度推送除了时间间隔外，还要求进度有变化；此阈值用于允许 Total Time 增量触发
+# 设为 0 表示不启用，仅以 step/inc/total_time 快照变化判断
+progress_notify_min_total_time_delta = 0
+
+# ------------------------------------------
+# 3. CSV 日志记录配置
+# ------------------------------------------
+[csv]
+# 是否启用 CSV 记录功能
+enable = true
+
+# CSV 文件保存目录（留空则默认保存在项目根目录）
+path = ""
+
+# CSV 文件名模板
+# 支持时间格式化代码: %Y(年) %m(月) %d(日)
+# 支持占位符: {folder}
+filename = "abaqus_jobs_%Y%m.csv"
+
+# CSV 更新间隔（秒）
+# 设为 0 表示实时写入（不建议，可能影响性能）
+update_interval = 60
+
+# CSV 记录覆盖模式
+# none:    每次运行都新增一条记录 (默认)
+# running: 覆盖同名且状态为"运行中"的记录 (推荐调试时使用)
+# always:  总是覆盖同名作业的最后一条记录
+overwrite_mode = "none"
+
+# 保留历史记录数
+# 仅在覆盖模式生效时用于查找历史记录，0 表示不限制
+max_history = 5
+
+# ------------------------------------------
+# 4. 通知配置（可选）
+# ------------------------------------------
+[webhook]
+# 默认飞书 Webhook URL（留空则不发送）
+feishu_url = ""
+
+# 默认企业微信 Webhook URL（留空则不发送）
+wecom_url = ""
+
+# 多机器人路由配置（数组表）
+# channel: feishu / wecom
+# events: start / progress / complete / error / orphan
+# match_dir: 目录前缀匹配（可匹配子目录）
+# match_job: 作业名通配符（可选，如 ProjectA-*；不填则匹配全部作业）
+# webhook_url: 目标机器人地址
+# [[webhook.routes]]
+# channel = "feishu"
+# events = ["start", "progress", "complete"]
+# match_dir = "C:/Abaqus_Jobs"
+# webhook_url = "https://www.feishu.cn/flow/api/trigger-webhook/xxx"
+
+# ------------------------------------------
+# 5. 飞书多维表格配置（可选）
+# ------------------------------------------
+[bitable]
+# 是否启用飞书多维表格同步
+enable = false
+
+# 飞书应用 ID（必填）
+app_id = ""
+
+# 飞书应用 Secret（必填）
+app_secret = ""
+
+# 多维表格的 App Token（从飞书多维表格 URL 中获取）
+# URL 格式: https://xxx.feishu.cn/base/bascnXXXXXX?table=tblXXXXXX
+# app_token 就是 bascnXXXXXX 这部分
+app_token = ""
+
+# 数据表的 Table ID（从飞书多维表格 URL 中获取）
+# URL 格式: https://xxx.feishu.cn/base/bascnXXXXXX?table=tblXXXXXX
+# table_id 就是 tblXXXXXX 这部分（不要包含 view 参数）
+table_id = ""
+
+# 多维表格更新间隔（秒）
+# 设为 0 表示每次作业更新都同步到多维表格（可能增加 API 调用量）
+# 设为大于 0 表示按间隔更新，默认 60 秒
+update_interval = 60
+
+# 保留历史记录数
+# 作业完成时，会清理该作业的旧记录，仅保留最近的 N 条
+# 设为 0 表示不清理，保留所有历史记录
+max_history = 5
+
+# 注意事项：
+# 1. 首次使用前，需要在飞书多维表格中创建以下字段：
+#    - 作业名称（文本）
+#    - 工作目录（文本）
+#    - 计算机（文本）
+#    - 开始时间（日期）
+#    - 结束时间（日期）
+#    - 耗时（文本）
+#    - 进度（进度）
+#    - 状态（单选）：运行中、成功、失败、异常终止
+#    - 计算结果（文本）
+#    - ODB大小(MB)（数字）
+#    - Total Time（数字）
+# 2. 飞书应用需要有对应多维表格的写入权限
+# 3. 多维表格同步与 CSV 记录可同时使用
+
+# ------------------------------------------
+# 2. 监控与通知基础配置
+# ------------------------------------------
+# 轮询间隔（秒）
+poll_interval = 5
+
+# 是否输出详细日志到控制台（true/false）
+verbose = true
+
+# 进度通知间隔（秒）
+progress_notify_interval = 10
+
+# 是否启用进程检测
+# 开启后会检查 lck 文件对应的 Abaqus 进程是否存在
+# 如果进程不存在但 lck 存在，将判定为"异常终止"
+enable_process_detection = true
+
+# .lck 文件宽限期（秒）
+lck_grace_period = 60
+
+# .lck 删除后的结束确认期（秒）
+# 设为 0 表示禁用（恢复为“lck 一消失就立刻落定状态”的旧行为）
+job_end_confirm_period = 60
+
+# 通知去重窗口（秒）
+notify_dedupe_ttl = 3600
+
+# Total Time 最小增量阈值（可选）
+# 进度推送除了时间间隔外，还要求进度有变化；此阈值用于允许 Total Time 增量触发
+# 设为 0 表示不启用，仅以 step/inc/total_time 快照变化判断
+progress_notify_min_total_time_delta = 0
+
+# ------------------------------------------
+# 3. CSV 日志记录配置
+# ------------------------------------------
+[csv]
+# 是否启用 CSV 记录功能
+enable = true
+
+# CSV 文件保存目录（留空则默认保存在项目根目录）
+path = ""
+
+# CSV 文件名模板
+# 支持时间格式化代码: %Y(年) %m(月) %d(日)
+# 支持占位符: {folder}
+filename = "abaqus_jobs_%Y%m.csv"
+
+# CSV 更新间隔（秒）
+# 设为 0 表示实时写入（不建议，可能影响性能）
+update_interval = 10
+
+# CSV 记录覆盖模式
+# none:    每次运行都新增一条记录 (默认)
+# running: 覆盖同名且状态为"运行中"的记录 (推荐调试时使用)
+# always:  总是覆盖同名作业的最后一条记录
+overwrite_mode = "running"
+
+# 保留历史记录数
+# 仅在覆盖模式生效时用于查找历史记录，0 表示不限制
+max_history = 2
+
+# ------------------------------------------
+# 4. 通知配置（可选）
+# ------------------------------------------
+[webhook]
+# 默认飞书 Webhook URL（留空则不发送）
+feishu_url = ""
+
+# 默认企业微信 Webhook URL（留空则不发送）
+wecom_url = ""
+
+# 多机器人路由配置（数组表）
+# channel: feishu / wecom
+# events: start / progress / complete / error / orphan
+# match_dir: 目录前缀匹配（可匹配子目录）
+# match_job: 作业名通配符（可选，如 ProjectA-*；不填则匹配全部作业）
+# webhook_url: 目标机器人地址
+[[webhook.routes]]
+channel = "feishu"
+events = ["start", "progress", "complete", "error", "orphan"]
+match_dir = "C:/Abaqus_Jobs"
+webhook_url = "https://www.feishu.cn/flow/api/trigger-webhook/xxx"
+
+[[webhook.routes]]
+channel = "feishu"
+events = ["start", "progress", "complete", "error", "orphan"]
+match_dir = "C:/Abaqus_Jobs"
+webhook_url = "https://www.feishu.cn/flow/api/trigger-webhook/yyy"
+
