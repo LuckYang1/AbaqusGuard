@@ -83,11 +83,17 @@ wecom_url = ""
 # match_dir: 目录前缀匹配（可匹配子目录）
 # match_job: 作业名通配符（可选，如 ProjectA-*；不填则匹配全部作业）
 # webhook_url: 目标机器人地址
-# [[webhook.routes]]
-# channel = "feishu"
-# events = ["start", "progress", "complete"]
-# match_dir = "C:/Abaqus_Jobs"
-# webhook_url = "https://www.feishu.cn/flow/api/trigger-webhook/xxx"
+[[webhook.routes]]
+channel = "feishu"
+events = ["start", "progress", "complete"]
+match_dir = "C:/Abaqus_Jobs"
+webhook_url = "https://www.feishu.cn/flow/api/trigger-webhook/xxx"
+
+[[webhook.routes]]
+channel = "feishu"
+events = ["start", "progress", "complete", "error", "orphan"]
+match_dir = "C:/Abaqus_Jobs"
+webhook_url = "https://www.feishu.cn/flow/api/trigger-webhook/yyy"
 
 # ------------------------------------------
 # 5. 飞书多维表格配置（可选）
@@ -170,60 +176,7 @@ notify_dedupe_ttl = 3600
 # 设为 0 表示不启用，仅以 step/inc/total_time 快照变化判断
 progress_notify_min_total_time_delta = 0
 
-# ------------------------------------------
-# 3. CSV 日志记录配置
-# ------------------------------------------
-[csv]
-# 是否启用 CSV 记录功能
-enable = true
 
-# CSV 文件保存目录（留空则默认保存在项目根目录）
-path = ""
 
-# CSV 文件名模板
-# 支持时间格式化代码: %Y(年) %m(月) %d(日)
-# 支持占位符: {folder}
-filename = "abaqus_jobs_%Y%m.csv"
 
-# CSV 更新间隔（秒）
-# 设为 0 表示实时写入（不建议，可能影响性能）
-update_interval = 10
-
-# CSV 记录覆盖模式
-# none:    每次运行都新增一条记录 (默认)
-# running: 覆盖同名且状态为"运行中"的记录 (推荐调试时使用)
-# always:  总是覆盖同名作业的最后一条记录
-overwrite_mode = "running"
-
-# 保留历史记录数
-# 仅在覆盖模式生效时用于查找历史记录，0 表示不限制
-max_history = 2
-
-# ------------------------------------------
-# 4. 通知配置（可选）
-# ------------------------------------------
-[webhook]
-# 默认飞书 Webhook URL（留空则不发送）
-feishu_url = ""
-
-# 默认企业微信 Webhook URL（留空则不发送）
-wecom_url = ""
-
-# 多机器人路由配置（数组表）
-# channel: feishu / wecom
-# events: start / progress / complete / error / orphan
-# match_dir: 目录前缀匹配（可匹配子目录）
-# match_job: 作业名通配符（可选，如 ProjectA-*；不填则匹配全部作业）
-# webhook_url: 目标机器人地址
-[[webhook.routes]]
-channel = "feishu"
-events = ["start", "progress", "complete", "error", "orphan"]
-match_dir = "C:/Abaqus_Jobs"
-webhook_url = "https://www.feishu.cn/flow/api/trigger-webhook/xxx"
-
-[[webhook.routes]]
-channel = "feishu"
-events = ["start", "progress", "complete", "error", "orphan"]
-match_dir = "C:/Abaqus_Jobs"
-webhook_url = "https://www.feishu.cn/flow/api/trigger-webhook/yyy"
 
