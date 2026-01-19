@@ -178,7 +178,7 @@ https://xxx.feishu.cn/base/bascnXXXXXX?table=tblXXXXXX
 ```toml
 [bitable]
 enable = true
-app_id = "cli_a9e82413e7785cc2"
+app_id = "your_app_id"
 app_secret = "your_app_secret"
 app_token = "bascnXXXXXX"
 table_id = "tblXXXXXX"
