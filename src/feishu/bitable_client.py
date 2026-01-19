@@ -10,6 +10,7 @@ from lark_oapi.api.bitable.v1 import (
     SearchAppTableRecordRequest,
     SearchAppTableRecordRequestBody,
     GetAppTableRecordRequest,
+    DeleteAppTableRecordRequest,
     AppTableRecord,
 )
 from typing import Optional, Dict, Any, List
@@ -252,3 +253,42 @@ class BitableClient:
         except Exception as e:
             self._log(f"获取记录异常: record_id={record_id}, {e}")
             return None
+
+    def delete_record(self, app_token: str, table_id: str, record_id: str) -> bool:
+        """
+        删除记录
+
+        Args:
+            app_token: 多维表格 token
+            table_id: 数据表 ID
+            record_id: 记录 ID
+
+        Returns:
+            是否成功
+        """
+        try:
+            # 构建请求对象
+            request = (
+                DeleteAppTableRecordRequest.builder()
+                .app_token(app_token)
+                .table_id(table_id)
+                .record_id(record_id)
+                .build()
+            )
+
+            # 发送请求
+            response = self.client.bitable.v1.app_table_record.delete(request)
+
+            if not response.success():
+                self._log(
+                    f"删除记录失败: record_id={record_id}, code={response.code}, "
+                    f"msg={response.msg}, log_id={response.get_log_id()}"
+                )
+                return False
+
+            self._log(f"删除记录成功: record_id={record_id}")
+            return True
+
+        except Exception as e:
+            self._log(f"删除记录异常: record_id={record_id}, {e}")
+            return False

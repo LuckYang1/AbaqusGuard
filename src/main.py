@@ -49,6 +49,7 @@ class AbaqusMonitor:
                     app_token=self.settings.BITABLE_APP_TOKEN,
                     table_id=self.settings.BITABLE_TABLE_ID,
                     verbose=self.settings.VERBOSE,
+                    max_history=self.settings.BITABLE_MAX_HISTORY,
                 )
                 self._log("飞书多维表格记录器已启用")
             else:

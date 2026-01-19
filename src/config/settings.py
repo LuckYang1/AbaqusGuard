@@ -98,6 +98,7 @@ class Settings:
     BITABLE_APP_TOKEN: str = ""  # 多维表格 token
     BITABLE_TABLE_ID: str = ""  # 数据表 ID
     BITABLE_UPDATE_INTERVAL: int = 60  # 多维表格更新间隔（秒）
+    BITABLE_MAX_HISTORY: int = 5  # 保留最近 N 条记录（每个作业），0 表示不限制
 
     def __post_init__(self):
         """初始化后处理，转换类型和设置默认值"""
@@ -217,6 +218,7 @@ class Settings:
             BITABLE_APP_TOKEN=_get_str(bitable_config, "app_token", ""),
             BITABLE_TABLE_ID=_get_str(bitable_config, "table_id", ""),
             BITABLE_UPDATE_INTERVAL=_get_int(bitable_config, "update_interval", 60),
+            BITABLE_MAX_HISTORY=_get_int(bitable_config, "max_history", 5),
         )
 
 

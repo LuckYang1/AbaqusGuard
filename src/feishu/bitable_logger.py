@@ -37,6 +37,7 @@ class BitableLogger:
         app_token: str,
         table_id: str,
         verbose: bool = False,
+        max_history: int = 5,
     ):
         """
         初始化多维表格记录器
@@ -47,11 +48,13 @@ class BitableLogger:
             app_token: 多维表格 token
             table_id: 数据表 ID
             verbose: 是否输出详细日志
+            max_history: 保留历史记录数（每个作业），0 表示不限制
         """
         self.client = BitableClient(app_id, app_secret, verbose)
         self.app_token = app_token
         self.table_id = table_id
         self.verbose = verbose
+        self.max_history = max_history
         self._job_record_map: Dict[str, str] = {}  # {job_key: record_id}
 
     def _log(self, message: str):
@@ -72,6 +75,67 @@ class BitableLogger:
         """
         start_time_str = job.start_time.strftime("%Y-%m-%d %H:%M:%S")
         return f"{job.name}|{job.work_dir}|{start_time_str}"
+
+    def _cleanup_old_records(self, job: JobInfo, keep: int) -> None:
+        """
+        清理旧记录，保留最近 N 条
+
+        Args:
+            job: 作业信息
+            keep: 保留数量
+        """
+        if keep <= 0:
+            return
+
+        try:
+            # 查询所有匹配的记录（作业名称 + 工作目录）
+            filter_str = f'([{self.FIELD_NAMES["job_name"]}]="{job.name}" AND [{self.FIELD_NAMES["work_dir"]}]="{job.work_dir}")'
+
+            records = self.client.search_records(
+                app_token=self.app_token,
+                table_id=self.table_id,
+                filter_str=filter_str,
+                field_names=[self.FIELD_NAMES["start_time"]],
+            )
+
+            if not records:
+                return
+
+            # 按开始时间降序排序，取最新的
+            sorted_records = sorted(
+                records,
+                key=lambda r: r.get("fields", {}).get(
+                    self.FIELD_NAMES["start_time"], 0
+                ),
+                reverse=True,
+            )
+
+            # 如果匹配数量超过保留数量，删除最早的
+            if len(sorted_records) > keep:
+                # 要删除的记录（跳过最后 keep 条）
+                records_to_delete = sorted_records[keep:]
+
+                deleted_count = 0
+                for record in records_to_delete:
+                    record_id = record.get("record_id")
+                    if record_id:
+                        success = self.client.delete_record(
+                            app_token=self.app_token,
+                            table_id=self.table_id,
+                            record_id=record_id,
+                        )
+                        if success:
+                            deleted_count += 1
+                            # 清理缓存中的映射
+                            for key, value in list(self._job_record_map.items()):
+                                if value == record_id:
+                                    del self._job_record_map[key]
+
+                if deleted_count > 0:
+                    self._log(f"清理旧记录: {job.name}，删除 {deleted_count} 条")
+
+        except Exception as e:
+            self._log(f"清理旧记录失败: {job.name}, {e}")
 
     def _build_fields(self, job: JobInfo, is_new: bool = True) -> Dict[str, Any]:
         """
@@ -197,6 +261,7 @@ class BitableLogger:
     def update_job(self, job: JobInfo) -> bool:
         """
         更新作业记录（作业进度更新或完成时调用）
+        作业完成时，根据 max_history 配置清理旧记录
 
         Args:
             job: 作业信息
@@ -231,6 +296,10 @@ class BitableLogger:
 
             if success:
                 self._log(f"作业记录已更新: {job.name} ({job.status.value})")
+
+                # 如果作业已完成，执行历史清理
+                if job.is_completed and self.max_history > 0:
+                    self._cleanup_old_records(job, self.max_history)
             else:
                 # 如果更新失败，清除缓存，下次重新查询
                 if job_key in self._job_record_map:
@@ -253,7 +322,12 @@ def get_bitable_logger() -> Optional[BitableLogger]:
 
 
 def init_bitable_logger(
-    app_id: str, app_secret: str, app_token: str, table_id: str, verbose: bool = False
+    app_id: str,
+    app_secret: str,
+    app_token: str,
+    table_id: str,
+    verbose: bool = False,
+    max_history: int = 5,
 ) -> BitableLogger:
     """
     初始化多维表格记录器
@@ -264,10 +338,13 @@ def init_bitable_logger(
         app_token: 多维表格 token
         table_id: 数据表 ID
         verbose: 是否输出详细日志
+        max_history: 保留历史记录数（每个作业），0 表示不限制
 
     Returns:
         多维表格记录器实例
     """
     global _logger
-    _logger = BitableLogger(app_id, app_secret, app_token, table_id, verbose)
+    _logger = BitableLogger(
+        app_id, app_secret, app_token, table_id, verbose, max_history
+    )
     return _logger

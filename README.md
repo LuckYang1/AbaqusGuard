@@ -134,6 +134,7 @@ webhook_url = "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=bbb"
 | `bitable.app_token` | 空 | 多维表格的 App Token |
 | `bitable.table_id` | 空 | 数据表的 Table ID |
 | `bitable.update_interval` | `60` | 多维表格更新间隔（秒） |
+| `bitable.max_history` | `5` | 保留历史记录数（每个作业） |
 
 #### 📌 多维表格配置步骤
 
@@ -181,9 +182,12 @@ app_id = "cli_a9e82413e7785cc2"
 app_secret = "your_app_secret"
 app_token = "bascnXXXXXX"
 table_id = "tblXXXXXX"
+max_history = 5  # 保留最近 5 条记录
 ```
 
 > 💡 多维表格同步与 CSV 记录可同时使用，数据会同时写入两者
+>
+> 💡 多维表格历史记录会在作业完成时自动清理，仅保留最近 N 条记录（由 `max_history` 配置）
 
 ---
 
