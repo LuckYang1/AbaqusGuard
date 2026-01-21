@@ -292,9 +292,7 @@ class JobCSVLogger:
         """
         try:
             csv_path = self._get_csv_path(job.work_dir)
-            if not csv_path.exists():
-                self._log(f"CSV 文件不存在，无法更新: {csv_path}")
-                return False
+            self._ensure_csv_exists(csv_path)
 
             # 读取所有行
             rows = self._read_all_rows(csv_path)
@@ -316,12 +314,14 @@ class JobCSVLogger:
                 target_row_idx = self._find_matching_row(rows, job.name, job.work_dir)
 
             if target_row_idx == -1:
-                self._log(f"未找到作业记录: {job.name}")
-                return False
-
-            # 更新目标行
-            row_data = self._build_row_data(job, is_new=False)
-            rows[target_row_idx].update(row_data)
+                # 未找到记录，自动新增
+                self._log(f"未找到作业记录: {job.name}，自动新增")
+                row_data = self._build_row_data(job, is_new=False)
+                rows.append(row_data)
+            else:
+                # 更新目标行
+                row_data = self._build_row_data(job, is_new=False)
+                rows[target_row_idx].update(row_data)
 
             # 如果作业已完成，执行历史清理
             if job.is_completed and self.settings.CSV_MAX_HISTORY > 0:

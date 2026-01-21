@@ -280,8 +280,27 @@ class BitableLogger:
                 record_id = self._search_existing_record(job)
 
             if not record_id:
-                self._log(f"未找到作业记录: {job.name}")
-                return False
+                # 未找到记录，自动新增
+                self._log(f"未找到作业记录: {job.name}，自动新增")
+                fields = self._build_fields(job, is_new=True)
+                # 用更新数据覆盖初始数据
+                update_fields = self._build_fields(job, is_new=False)
+                fields.update(update_fields)
+
+                record_id = self.client.create_record(
+                    app_token=self.app_token, table_id=self.table_id, fields=fields
+                )
+
+                if record_id:
+                    self._job_record_map[job_key] = record_id
+                    self._log(f"作业记录已自动添加: {job.name} (record_id={record_id})")
+
+                    # 如果作业已完成，执行历史清理
+                    if job.is_completed and self.max_history > 0:
+                        self._cleanup_old_records(job, self.max_history)
+                    return True
+                else:
+                    return False
 
             # 构建更新字段
             fields = self._build_fields(job, is_new=False)
