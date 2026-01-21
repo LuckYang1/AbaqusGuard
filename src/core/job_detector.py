@@ -164,8 +164,9 @@ class JobDetector:
             if job:
                 jobs.append(job)
 
-        # 7. 处理结束信号：.lck 消失后进入“收尾中”，等待 .sta 写入最终状态
-        ended_jobs = previous_jobs - current_lck
+        # 7. 处理结束信号：.lck 消失后进入"收尾中"，等待 .sta 写入最终状态
+        # 注意：排除已经在 finishing_jobs 中的作业，避免重复处理导致 end_detected_time 被重置
+        ended_jobs = (previous_jobs - current_lck) - set(self.finishing_jobs[directory].keys())
         for job_name in ended_jobs:
             job = self.running_jobs[directory].pop(job_name, None)
             if job is None:
@@ -268,6 +269,9 @@ class JobDetector:
                 self.completed_jobs.append(job)
                 jobs.append(job)
                 keys_to_remove.append(job_name)
+            else:
+                # 仍在等待确认期，将作业加入返回列表以便 main.py 更新状态
+                jobs.append(job)
 
         for job_name in keys_to_remove:
             _ = finishing.pop(job_name, None)
