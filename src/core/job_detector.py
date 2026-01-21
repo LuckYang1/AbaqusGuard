@@ -258,6 +258,8 @@ class JobDetector:
                 self._handle_job_end(job, directory)
                 jobs.append(job)
                 keys_to_remove.append(job_name)
+                # 将作业加入忽略列表，防止 .lck 残留时被重新检测为新作业
+                self.ignored_lck[directory].add(job_name)
                 continue
 
             if elapsed >= self.settings.JOB_END_CONFIRM_PERIOD:
@@ -269,6 +271,8 @@ class JobDetector:
                 self.completed_jobs.append(job)
                 jobs.append(job)
                 keys_to_remove.append(job_name)
+                # 将作业加入忽略列表，防止 .lck 残留时被重新检测为新作业
+                self.ignored_lck[directory].add(job_name)
             else:
                 # 仍在等待确认期，将作业加入返回列表以便 main.py 更新状态
                 jobs.append(job)

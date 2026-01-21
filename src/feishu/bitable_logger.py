@@ -320,9 +320,28 @@ class BitableLogger:
                 if job.is_completed and self.max_history > 0:
                     self._cleanup_old_records(job, self.max_history)
             else:
-                # 如果更新失败，清除缓存，下次重新查询
+                # 更新失败（可能记录已被删除），清除缓存并尝试新增
                 if job_key in self._job_record_map:
                     del self._job_record_map[job_key]
+
+                self._log(f"更新失败，尝试新增记录: {job.name}")
+                fields = self._build_fields(job, is_new=True)
+                update_fields = self._build_fields(job, is_new=False)
+                fields.update(update_fields)
+
+                new_record_id = self.client.create_record(
+                    app_token=self.app_token, table_id=self.table_id, fields=fields
+                )
+
+                if new_record_id:
+                    self._job_record_map[job_key] = new_record_id
+                    self._log(f"作业记录已自动添加: {job.name} (record_id={new_record_id})")
+
+                    if job.is_completed and self.max_history > 0:
+                        self._cleanup_old_records(job, self.max_history)
+                    return True
+                else:
+                    return False
 
             return success
 
