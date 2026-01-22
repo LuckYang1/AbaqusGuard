@@ -220,6 +220,7 @@ class JobCSVLogger:
 
             mode = self.settings.CSV_OVERWRITE_MODE
             row_data = self._build_row_data(job, is_new=True)
+            need_cleanup = False
 
             if mode == "none":
                 # 直接追加新行
@@ -227,6 +228,7 @@ class JobCSVLogger:
                     writer = csv.DictWriter(f, fieldnames=self.COLUMNS)
                     writer.writerow(row_data)
                 self._log(f"作业记录已添加到 CSV: {job.name}")
+                need_cleanup = True
 
             elif mode == "running":
                 # 查找同名+同目录+状态为"运行中"的记录
@@ -246,6 +248,7 @@ class JobCSVLogger:
                         writer = csv.DictWriter(f, fieldnames=self.COLUMNS)
                         writer.writerow(row_data)
                     self._log(f"作业记录已添加到 CSV: {job.name}")
+                    need_cleanup = True
 
             elif mode == "always":
                 # 查找同名+同目录的最后一条记录
@@ -263,6 +266,7 @@ class JobCSVLogger:
                         writer = csv.DictWriter(f, fieldnames=self.COLUMNS)
                         writer.writerow(row_data)
                     self._log(f"作业记录已添加到 CSV: {job.name}")
+                    need_cleanup = True
 
             else:
                 # 未知模式，使用默认行为（新增）
@@ -270,6 +274,15 @@ class JobCSVLogger:
                     writer = csv.DictWriter(f, fieldnames=self.COLUMNS)
                     writer.writerow(row_data)
                 self._log(f"作业记录已添加到 CSV: {job.name}")
+                need_cleanup = True
+
+            # 添加记录后清理旧记录
+            if need_cleanup and self.settings.CSV_MAX_HISTORY > 0:
+                rows = self._read_all_rows(csv_path)
+                rows = self._cleanup_old_records(
+                    rows, job.name, job.work_dir, self.settings.CSV_MAX_HISTORY
+                )
+                self._write_all_rows(csv_path, rows)
 
             return True
 

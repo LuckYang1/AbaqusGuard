@@ -256,6 +256,11 @@ class BitableLogger:
                 self._log(
                     f"作业记录已添加到多维表格: {job.name} (record_id={record_id})"
                 )
+
+                # 添加记录后清理旧记录
+                if self.max_history > 0:
+                    self._cleanup_old_records(job, self.max_history)
+
                 return True
             else:
                 return False

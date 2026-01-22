@@ -311,7 +311,8 @@ class AbaqusMonitor:
         now = datetime.now()
 
         if not last_update:
-            # 第一次，记录时间但不更新（刚添加过）
+            # 第一次，立即更新进度
+            self.bitable_logger.update_job(job)
             self.last_bitable_update[job_key] = now
             return
 
