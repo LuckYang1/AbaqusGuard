@@ -237,6 +237,12 @@ class BitableLogger:
         """
         try:
             job_key = self._get_job_key(job)
+
+            # 检查缓存中是否已存在该作业的记录
+            if job_key in self._job_record_map:
+                self._log(f"作业记录已存在，跳过添加: {job.name}")
+                return True
+
             fields = self._build_fields(job, is_new=True)
 
             # 创建新记录

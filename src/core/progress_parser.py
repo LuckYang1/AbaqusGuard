@@ -71,12 +71,17 @@ class StaParser:
             if not lines:
                 return result
 
-            # 检测是否为 Explicit 分析（第一行包含 "Abaqus/Explicit"）
-            first_line = lines[0] if lines else ""
-            self.is_explicit = "ABAQUS/EXPLICIT" in first_line.upper()
+            # 检测是否为 Explicit 分析（扫描前 10 行查找 "Abaqus/Explicit"）
+            header_lines = "".join(lines[:10]).upper()
+            self.is_explicit = "ABAQUS/EXPLICIT" in header_lines
             result["is_explicit"] = self.is_explicit
 
-            # 解析第一行获取开始时间
+            # 解析第一行获取开始时间（跳过空行）
+            first_line = ""
+            for line in lines[:10]:
+                if line.strip():
+                    first_line = line
+                    break
             result["start_time"] = self._parse_start_time(first_line)
 
             # 解析状态：不要只看“最后一行”，因为末尾经常是数据行
