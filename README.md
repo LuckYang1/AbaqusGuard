@@ -347,3 +347,6 @@ max_history = 5
 ## 📄 License
 
 MIT License © 2026
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=LuckYang1/AbaqusGuard&type=date&legend=bottom-right)](https://www.star-history.com/#LuckYang1/AbaqusGuard&type=date&legend=bottom-right)
