@@ -192,12 +192,13 @@ class BitableLogger:
                 # self.FIELD_NAMES["update_time"]: int(datetime.now().timestamp() * 1000),  # 暂时注释
             }
 
-    def _search_existing_record(self, job: JobInfo) -> Optional[str]:
+    def _search_existing_record(self, job: JobInfo, exact_match: bool = True) -> Optional[str]:
         """
         查询现有记录
 
         Args:
             job: 作业信息
+            exact_match: 是否精确匹配开始时间
 
         Returns:
             记录 ID，未找到返回 None
@@ -216,7 +217,16 @@ class BitableLogger:
         if not records:
             return None
 
-        # 按开始时间降序排序，取最新的
+        # 精确匹配：查找开始时间完全一致的记录
+        if exact_match:
+            target_start_time = int(job.start_time.timestamp() * 1000)
+            for record in records:
+                record_start_time = record.get("fields", {}).get(self.FIELD_NAMES["start_time"], 0)
+                if record_start_time == target_start_time:
+                    return record.get("record_id")
+            return None
+
+        # 非精确匹配：按开始时间降序排序，取最新的
         sorted_records = sorted(
             records,
             key=lambda r: r.get("fields", {}).get(self.FIELD_NAMES["start_time"], 0),
@@ -256,11 +266,7 @@ class BitableLogger:
                 self._log(
                     f"作业记录已添加到多维表格: {job.name} (record_id={record_id})"
                 )
-
-                # 添加记录后清理旧记录
-                if self.max_history > 0:
-                    self._cleanup_old_records(job, self.max_history)
-
+                # 注意：不在添加时清理历史，只在作业完成时清理
                 return True
             else:
                 return False
@@ -286,9 +292,9 @@ class BitableLogger:
             # 优先使用缓存的 record_id
             record_id = self._job_record_map.get(job_key)
 
-            # 如果缓存中没有，查询现有记录
+            # 如果缓存中没有，查询现有记录（精确匹配开始时间）
             if not record_id:
-                record_id = self._search_existing_record(job)
+                record_id = self._search_existing_record(job, exact_match=True)
 
             if not record_id:
                 # 未找到记录，自动新增
